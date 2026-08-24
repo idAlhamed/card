@@ -443,7 +443,16 @@ one value out to every destination that needs it:
 
 ### 10.2 Dependencies
 
-Build-time `devDependencies` only: `qrcode`, `sharp`, `opentype.js`, `pdfkit`.
+Build-time `devDependencies` only: `qrcode`, `sharp`, `opentype.js`, `pdfkit`,
+`jsqr`.
+
+`jsqr` decodes; `qrcode` only encodes. The round-trip assertion in §11 is
+impossible without a decoder, so the choice is five devDependencies or no
+round-trip check. The check is worth more than the fifth dependency.
+
+Inter is vendored as a TTF under `vendor/fonts/` alongside its OFL licence,
+fetched once via `npm run fetch:font`. The SIL Open Font Licence permits
+redistribution. `opentype.js` requires TTF or OTF; it cannot parse WOFF2.
 
 **Zero dependencies reach the browser.** The page ships hand-written HTML and CSS
 and nothing else — no framework, no JavaScript library, no webfont.
