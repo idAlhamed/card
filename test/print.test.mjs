@@ -4,6 +4,7 @@ import { readFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import {
   buildCardSVG, buildCardPDF, CARD, DOC_W, DOC_H, RICH_BLACK_CMYK,
   faceLayout, cropMarkLines,
@@ -209,4 +210,24 @@ test('the QR panel radius is read from the shared layout, not hardcoded in the S
   const svg = await buildCardSVG('back', config);
   assert.match(svg, new RegExp(`class="qr-panel"[^>]*rx="${qr.panelRadius}"`),
     'the SVG panel radius must equal the one faceLayout produced, not a separate literal');
+});
+
+test('the PDF is byte-reproducible: identical inputs produce identical output', async () => {
+  // PDFKit defaults info.CreationDate to `new Date()` and derives the
+  // trailer's document /ID by hashing the whole info object (including that
+  // timestamp), so an unpinned CreationDate makes every build produce a
+  // different file for byte-identical content — every `npm run build` then
+  // dirties print/card-*.pdf in git even when nothing meaningful changed.
+  const dir = await mkdtemp(join(tmpdir(), 'print-'));
+  for (const face of ['front', 'back']) {
+    const a = join(dir, `${face}-a.pdf`);
+    const b = join(dir, `${face}-b.pdf`);
+    await buildCardPDF(face, validConfig(), a);
+    await buildCardPDF(face, validConfig(), b);
+    const hash = (buf) => createHash('sha256').update(buf).digest('hex');
+    assert.equal(
+      hash(await readFile(a)), hash(await readFile(b)),
+      `${face}.pdf must be byte-identical across two builds from identical inputs`
+    );
+  }
 });

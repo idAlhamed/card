@@ -27,6 +27,15 @@ const TERTIARY = '#86868B';
 const L = CARD.bleed + CARD.safe;              // left safe edge: 7mm
 const R = CARD.bleed + CARD.trimW - CARD.safe; // right safe edge: 84.6mm
 
+// PDFKit defaults info.CreationDate to `new Date()` and then derives the
+// trailer's document /ID by hashing the whole `info` object (including that
+// timestamp) — so an unpinned CreationDate makes every build produce a
+// different file even for byte-identical content, which shows up as
+// permanent phantom diffs in git and defeats any "rebuild is a no-op" check.
+// A fixed epoch (never derived from the current time) makes both the
+// CreationDate field and the derived /ID deterministic across runs.
+const PINNED_CREATION_DATE = new Date(0);
+
 /**
  * Lays out one line of outlined type with its ink-top at `y`.
  * Returns resolved path data plus the position and fill both renderers need —
@@ -171,7 +180,10 @@ export async function buildCardPDF(face, config, outPath) {
   const doc = new PDFDocument({
     size: [DOC_W * MM_TO_PT, DOC_H * MM_TO_PT],
     margin: 0,
-    info: { Title: `${config.content.fullName} — business card ${face}` },
+    info: {
+      Title: `${config.content.fullName} — business card ${face}`,
+      CreationDate: PINNED_CREATION_DATE,
+    },
   });
   const stream = createWriteStream(outPath);
   doc.pipe(stream);
