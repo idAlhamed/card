@@ -8,7 +8,21 @@ export class PassError extends Error {
   }
 }
 
-const link = (href, text) => `<a href="${href}">${text}</a>`;
+// HTML-attribute-context escaping for attributedValue. This is the opposite
+// rule from vCard's escapeText: there, URI-type values are left unescaped
+// because a comma is legal in a URL; here the value sits inside an HTML
+// attribute, so '"' or '&' in a URL genuinely must be escaped. '&' must be
+// escaped FIRST, or the entities just introduced (e.g. '&quot;') would
+// themselves get re-escaped into '&amp;quot;'.
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
 
 export function buildPassJSON(config) {
   const { apple, content, contacts, url } = config;
@@ -38,9 +52,12 @@ export function buildPassJSON(config) {
     serialNumber: apple.serialNumber,
     description: apple.description,
 
-    backgroundColor: 'rgb(0,0,0)',
-    foregroundColor: 'rgb(245,245,247)',
-    labelColor: 'rgb(134,134,139)',
+    // Spaced form per Apple's documented examples (e.g. "rgb(23, 187, 82)");
+    // PassKit's tolerance for the compact form is unverified on a real
+    // device, and a rejected pass silently fails to open with no diagnostic.
+    backgroundColor: 'rgb(0, 0, 0)',
+    foregroundColor: 'rgb(245, 245, 247)',
+    labelColor: 'rgb(134, 134, 139)',
 
     generic: {
       // The name is carried by logo.png: it is the only element visible when
@@ -94,8 +111,16 @@ export function buildPassJSON(config) {
 // produces soft edges on the 29px icon.
 const RENDER_SIZE = 240;
 
-async function renderIcon(size) {
-  const mark = await wordmarkSVG('AH', {
+// First letter of each of the first two whitespace-separated words,
+// uppercased. 'ALI HAMED' -> 'AH'. A single-word name still yields a
+// (one-letter) monogram rather than throwing.
+function monogram(name) {
+  const words = String(name).trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+}
+
+async function renderIcon(size, initials) {
+  const mark = await wordmarkSVG(initials, {
     fontSize: RENDER_SIZE, letterSpacing: RENDER_SIZE * 0.06, fill: '#F5F5F7',
   });
   const glyph = await sharp(Buffer.from(mark))
@@ -134,13 +159,19 @@ async function renderLogo(text, width, height) {
     .png().toBuffer();
 }
 
-export async function renderPassAssets() {
+// Reads the wordmark from config.content.name rather than hardcoding it, so
+// editing the name in config.json doesn't leave the pass logo silently
+// stale (the same drift class fixed elsewhere for vCard escaping, the OG
+// bounds guard, and the icon error messages).
+export async function renderPassAssets(config) {
+  const name = config.content.name;
+  const initials = monogram(name);
   return new Map([
-    ['icon.png', await renderIcon(29)],
-    ['icon@2x.png', await renderIcon(58)],
-    ['icon@3x.png', await renderIcon(87)],
-    ['logo.png', await renderLogo('ALI HAMED', 160, 50)],
-    ['logo@2x.png', await renderLogo('ALI HAMED', 320, 100)],
-    ['logo@3x.png', await renderLogo('ALI HAMED', 480, 150)],
+    ['icon.png', await renderIcon(29, initials)],
+    ['icon@2x.png', await renderIcon(58, initials)],
+    ['icon@3x.png', await renderIcon(87, initials)],
+    ['logo.png', await renderLogo(name, 160, 50)],
+    ['logo@2x.png', await renderLogo(name, 320, 100)],
+    ['logo@3x.png', await renderLogo(name, 480, 150)],
   ]);
 }
