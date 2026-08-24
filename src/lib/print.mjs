@@ -30,16 +30,20 @@ const R = CARD.bleed + CARD.trimW - CARD.safe; // right safe edge: 84.6mm
 /**
  * Lays out one line of outlined type with its ink-top at `y`.
  * Returns resolved path data plus the position and fill both renderers need —
- * neither the SVG nor the PDF path recomputes this.
+ * neither the SVG nor the PDF path recomputes this. `advance` (width) and
+ * `height` are also carried so geometry tests can check the safe area
+ * without re-deriving glyph metrics from the path data.
  */
 async function line(text, { weight = 'semibold', size, spacing = 0, x, y, fill }) {
   const font = await loadFont(weight);
-  const { d, box } = textToPath(font, text, {
+  const { d, box, advance } = textToPath(font, text, {
     fontSize: size, letterSpacing: spacing,
   });
   const dy = Number((y - box.y1).toFixed(3));
-  return { d, x, y: dy, fill };
+  return { d, x, y: dy, fill, advance, height: box.y2 - box.y1 };
 }
+
+const QR_PANEL_RADIUS = 2;   // the one place the panel's corner radius lives
 
 /**
  * Geometry for the QR panel and every dark module, in millimetres.
@@ -58,32 +62,50 @@ function qrLayout(url, x, y) {
       modules.push({ x: ox + c * m, y: oy + r * m, size: m });
     }
   }
-  return { panelX: x, panelY: y, panelSize: CARD.qrPanel, modules };
+  return {
+    panelX: x, panelY: y, panelSize: CARD.qrPanel, panelRadius: QR_PANEL_RADIUS, modules,
+  };
 }
 
-function cropMarks() {
+/**
+ * The 8 crop-mark line segments (two per corner), in millimetres. This is
+ * the ONLY place their coordinates are computed — both buildCardSVG and
+ * buildCardPDF stroke exactly these segments, so a proof showing trim
+ * guidance can never ship with a printer file that has none.
+ */
+export function cropMarkLines() {
   const b = CARD.bleed;
   const len = 2;   // stays inside the 3mm bleed, never touching the trim
-  const x2 = b + CARD.trimW;
-  const y2 = b + CARD.trimH;
-  const mark = (x1, y1, x2_, y2_) =>
-    `<line class="crop" x1="${x1}" y1="${y1}" x2="${x2_}" y2="${y2_}" ` +
-    `stroke="#FFFFFF" stroke-width="0.1"/>`;
+  const trimX2 = b + CARD.trimW;
+  const trimY2 = b + CARD.trimH;
   return [
-    mark(0, b, len, b),           mark(b, 0, b, len),
-    mark(DOC_W - len, b, DOC_W, b), mark(x2, 0, x2, len),
-    mark(0, y2, len, y2),         mark(b, DOC_H - len, b, DOC_H),
-    mark(DOC_W - len, y2, DOC_W, y2), mark(x2, DOC_H - len, x2, DOC_H),
-  ].join('');
+    { x1: 0, y1: b, x2: len, y2: b },
+    { x1: b, y1: 0, x2: b, y2: len },
+    { x1: DOC_W - len, y1: b, x2: DOC_W, y2: b },
+    { x1: trimX2, y1: 0, x2: trimX2, y2: len },
+    { x1: 0, y1: trimY2, x2: len, y2: trimY2 },
+    { x1: b, y1: DOC_H - len, x2: b, y2: DOC_H },
+    { x1: DOC_W - len, y1: trimY2, x2: DOC_W, y2: trimY2 },
+    { x1: trimX2, y1: DOC_H - len, x2: trimX2, y2: DOC_H },
+  ];
+}
+
+function cropMarksSVG(lines) {
+  return lines.map(({ x1, y1, x2, y2 }) =>
+    `<line class="crop" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ` +
+    `stroke="#FFFFFF" stroke-width="0.1"/>`
+  ).join('');
 }
 
 /**
  * The single source of truth for what goes on each face: text lines (each
- * with resolved path data, position and fill) plus QR geometry, if any.
- * Both buildCardSVG and buildCardPDF render this same layout, so the proof
- * a client approves on screen can never drift from what the printer receives.
+ * with resolved path data, position, fill, advance and height) plus QR
+ * geometry, if any. Both buildCardSVG and buildCardPDF render this same
+ * layout, so the proof a client approves on screen can never drift from
+ * what the printer receives. Exported so geometry can be asserted directly
+ * by coordinate in tests, rather than only by counting rendered elements.
  */
-async function faceLayout(face, config) {
+export async function faceLayout(face, config) {
   if (face === 'front') {
     const name = await line(config.content.name, {
       size: 5.2, spacing: 0.72, x: L, y: 23.5, fill: PRIMARY,
@@ -114,7 +136,7 @@ function textToSVG(t) {
 function qrToSVG(qr) {
   const parts = [
     `<rect class="qr-panel" x="${qr.panelX}" y="${qr.panelY}" width="${qr.panelSize}" ` +
-    `height="${qr.panelSize}" rx="2" fill="${PAPER}"/>`,
+    `height="${qr.panelSize}" rx="${qr.panelRadius}" fill="${PAPER}"/>`,
   ];
   for (const mod of qr.modules) {
     parts.push(
@@ -131,7 +153,7 @@ export async function buildCardSVG(face, config) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${DOC_W}mm" ` +
     `height="${DOC_H}mm" viewBox="0 0 ${DOC_W} ${DOC_H}">` +
     `<rect x="0" y="0" width="${DOC_W}" height="${DOC_H}" fill="${INK_RGB}"/>` +
-    body + cropMarks() + '</svg>';
+    body + cropMarksSVG(cropMarkLines()) + '</svg>';
 }
 
 export async function buildCardPDF(face, config, outPath) {
@@ -155,12 +177,20 @@ export async function buildCardPDF(face, config, outPath) {
 
   if (layout.qr) {
     const { qr } = layout;
-    doc.roundedRect(qr.panelX, qr.panelY, qr.panelSize, qr.panelSize, 2).fill(PAPER);
+    doc.roundedRect(qr.panelX, qr.panelY, qr.panelSize, qr.panelSize, qr.panelRadius).fill(PAPER);
     doc.fillColor('#000000');
     for (const mod of qr.modules) {
       doc.rect(mod.x, mod.y, mod.size, mod.size);
     }
     doc.fill();
+  }
+
+  // Crop marks last, on top — same 8 segments the SVG proof shows, stroked
+  // in mm space (post-scale) so a coordinate change in cropMarkLines()
+  // reaches both outputs identically.
+  doc.lineWidth(0.1).strokeColor('#FFFFFF');
+  for (const { x1, y1, x2, y2 } of cropMarkLines()) {
+    doc.moveTo(x1, y1).lineTo(x2, y2).stroke();
   }
 
   doc.restore();
