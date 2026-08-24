@@ -71,7 +71,7 @@ async function main() {
   const logoMeta = await sharp(logoBuffer).metadata();
   // Fit the logo into a top strip, scaled down from its native 320x100 so
   // it reads as a header rather than dominating the card. The logo is now
-  // the Apple-mark + "BUSINESS CARD" title, not the name (see
+  // the Apple-mark + "Business Card" title, not the name (see
   // src/lib/pass.mjs renderLogo) — it must stay quiet up here.
   const logoHeight = 44;
   const logoWidth = Math.round((logoMeta.width / logoMeta.height) * logoHeight);

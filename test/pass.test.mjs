@@ -143,7 +143,7 @@ test('renders all six required assets at exact sizes', async () => {
 });
 
 test('renderPassAssets reads the monogram from config.content.name, not a hardcoded value', async () => {
-  // logo.png is now a fixed "Apple mark + BUSINESS CARD" title (see
+  // logo.png is now a fixed "Apple mark + Business Card" title (see
   // renderLogo) and no longer varies with the name at all — the name moved
   // to primaryFields in pass.json instead (asserted separately above). The
   // drift risk this test originally guarded against — a name edited in
@@ -164,7 +164,7 @@ test('renderPassAssets reads the monogram from config.content.name, not a hardco
   );
   assert.ok(
     aliAssets.get('logo.png').equals(janeAssets.get('logo.png')),
-    'logo.png is now a fixed title (Apple mark + BUSINESS CARD) and must not vary with the name'
+    'logo.png is now a fixed title (Apple mark + Business Card) and must not vary with the name'
   );
 });
 

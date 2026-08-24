@@ -74,7 +74,7 @@ export function buildPassJSON(config) {
       // The name lives in primaryFields, where Wallet renders it at
       // primary-field size — far larger than the 160x50pt logo slot could
       // ever fit it at. logo.png instead carries a small Apple mark +
-      // "BUSINESS CARD" title (see renderLogo below), which is what
+      // "Business Card" title (see renderLogo below), which is what
       // identifies the pass by type when passes are stacked in Wallet.
       primaryFields: [
         { key: 'name', label: '', value: content.name },
@@ -149,7 +149,7 @@ async function renderIcon(size, initials) {
 }
 
 // logo.png is now the pass TITLE, not the name: a small Apple mark followed
-// by "BUSINESS CARD", in labelColor, so the pass reads as a quiet category
+// by "Business Card", in labelColor, so the pass reads as a quiet category
 // label when stacked among other passes in Wallet — that's what identifies
 // it by type. The name itself moved to primaryFields (see buildPassJSON),
 // where Wallet renders it far larger than the 18.8pt the 160x50pt logo slot
@@ -159,19 +159,19 @@ async function renderIcon(size, initials) {
 // or duplicate the rgb() string used for pass.json's labelColor.
 const LABEL_COLOR = '#86868B';
 
-const LOGO_TITLE = 'BUSINESS CARD';
+const LOGO_TITLE = 'Business Card';
 
 // 0.12em, matching the tracking used for other small-caps label text in
 // this system (e.g. a "TECHNOLOGIES" caption) — tight enough to read as a
 // caption, not a wordmark competing with the name.
-const LOGO_TITLE_TRACKING = 0.12;
+const LOGO_TITLE_TRACKING = 0.06;
 
-// The Apple mark + "BUSINESS CARD" together sit at roughly this cap height
+// The Apple mark + "Business Card" together sit at roughly this cap height
 // inside the 50pt-tall logo slot (~11pt of 50pt): within the client's
 // requested "10-12pt" range, small and quiet enough not to compete with
 // the primaryField name.
-const LOGO_CAP_HEIGHT_RATIO = 11 / 50;
-// Gap between the Apple mark and "BUSINESS CARD", as a fraction of the
+const LOGO_CAP_HEIGHT_RATIO = 13.5 / 50;
+// Gap between the Apple mark and "Business Card", as a fraction of the
 // 160pt-wide slot.
 const LOGO_GAP_RATIO = 6 / 160;
 
