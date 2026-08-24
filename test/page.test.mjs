@@ -95,7 +95,31 @@ test('all six colour tokens are declared', async () => {
   }
 });
 
+// Extracts the body of a brace-delimited block by counting braces, not by
+// regex greediness — @media (prefers-reduced-motion: reduce) nests rule
+// blocks inside it, and a naive `{([\s\S]*)}` either stops at the first
+// inner `}` (non-greedy) or wrongly assumes the block is the last thing in
+// the file (greedy to end-of-file). This works regardless of position.
+function extractBlockBody(css, headerRegex) {
+  const headerMatch = css.match(headerRegex);
+  assert.ok(headerMatch, `block header not found: ${headerRegex}`);
+  const bodyStart = css.indexOf(headerMatch[0]) + headerMatch[0].length;
+  let depth = 1;
+  let i = bodyStart;
+  while (i < css.length && depth > 0) {
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}') depth--;
+    i++;
+  }
+  assert.equal(depth, 0, 'unbalanced braces: block never closes');
+  return css.slice(bodyStart, i - 1);
+}
+
 test('reduced motion is honoured', async () => {
   const css = await src('styles.css');
-  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  const body = extractBlockBody(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{/);
+  assert.match(body, /animation:\s*none/, 'must neutralise the entry animation');
+  assert.match(body, /transition:\s*none/, 'must neutralise transitions');
+  assert.match(body, /transform:\s*none/,
+    'must neutralise the press transform itself, not merely its transition');
 });
