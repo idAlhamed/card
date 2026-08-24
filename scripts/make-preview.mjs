@@ -82,7 +82,9 @@ async function main() {
   // tracking is unchanged from the old logo rendering (client request: keep
   // the current restrained tracking) — at this larger size it's the same
   // relative letterspacing, just no longer width-constrained to 160pt.
-  const primaryFontSize = 80;
+  // Reduced from 80 (~17.5%) — at 80 the name overwhelmed the header and
+  // the rest of the pass; still far larger than ROLE/TECHNOLOGIES below it.
+  const primaryFontSize = 66;
   const [primarySVG, roleLabelSVG, roleValueSVG, stackLabelSVG, stackValueSVG] = await Promise.all([
     wordmarkSVG(primary.value, { fontSize: primaryFontSize, letterSpacing: primaryFontSize * 0.08, fill: pass.foregroundColor }),
     wordmarkSVG(secondary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
@@ -96,8 +98,11 @@ async function main() {
 
   // Secondary (ROLE) and auxiliary (TECHNOLOGIES) fields sit side by side
   // in a row beneath the primary field, mirroring how Wallet lays out a
-  // generic pass's secondaryFields/auxiliaryFields row.
-  const fieldsY = primaryY + primaryPlaced.height + 48;
+  // generic pass's secondaryFields/auxiliaryFields row. The gap below the
+  // primary field is widened from 48 to 58 to offset its shorter glyph
+  // height, so this row lands at roughly the same spot it did before the
+  // primary field's type size was reduced.
+  const fieldsY = primaryY + primaryPlaced.height + 58;
   const leftColX = PAD;
   const rightColX = CARD_W / 2 + 12;
 

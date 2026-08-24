@@ -145,3 +145,62 @@ generated `logo@2x.png` (Apple mark + BUSINESS CARD). Regenerated via
   `src/icons/`, `src/lib/site.mjs`: confirmed untouched (`git diff` empty).
 - No dependencies added (`package.json`/no lockfile diff).
 - Not pushed, not merged.
+
+---
+
+# Follow-up: primary-field type size reduction (2026-08-24)
+
+Base commit for this change: `86de3a4`.
+
+## Status
+Complete. Mockup-only change to `scripts/make-preview.mjs`; `preview/apple-wallet-pass.png`
+is the only regenerated output.
+
+## What changed and why
+
+Client feedback: `ALI HAMED` (`primaryFields[0]`) rendered too large in the
+preview mockup, overwhelming the "BUSINESS CARD" header and the rest of the
+pass.
+
+- `primaryFontSize` reduced from `80` to `66` (17.5% reduction, within the
+  requested 15-20% range). Letter-spacing (`primaryFontSize * 0.08`) scales
+  down with it automatically, unchanged relative tracking.
+- The gap between the primary field and the ROLE/TECHNOLOGIES row (`fieldsY`
+  offset) widened from `48` to `58` to offset the primary field's shorter
+  glyph height at the new size, so that row lands within ~0.2px of its
+  original absolute position on the card — keeping the composition even
+  rather than letting extra dead space open up above the QR panel (which is
+  anchored to the bottom of the card and unaffected by this change).
+- Nothing else in the file changed. `src/lib/pass.mjs` (the real
+  `pass.json` field arrangement), `config.json`, `src/index.html`,
+  `src/styles.css`, `src/icons/`, `src/lib/site.mjs`, `docs/`, and the six
+  `wallet/AliHamed.pass/*.png` assets were not touched.
+
+Measured glyph heights (via `wordmarkSVG`) confirm the primary field is
+still clearly dominant after the reduction: 48.02px tall at fontSize 66 vs.
+22.93px for the ROLE value (fontSize 24) and 15.49px for the TECHNOLOGIES
+value (fontSize 20) — roughly 2x the next-largest field, same as before
+proportionally, just no longer visually overwhelming the header.
+
+**Note on real-device behavior:** as called out in the task brief, on an
+actual iOS device PassKit — not this script — controls the rendered size of
+a primary field; nothing in `src/lib/pass.mjs` or `pass.json` specifies a
+font size for `primaryFields`. This mockup's `primaryFontSize` constant is
+purely an approximation for visual review and has no bearing on the real
+pass's appearance. Nothing in the codebase implies otherwise.
+
+## Verification
+
+- `npm run preview:pass` run twice in a row: `preview/apple-wallet-pass.png`
+  byte-identical both times, sha256
+  `d0bf539a561de1640f2f0a5d526bd3cfdaf94df1fb27229756209fbe729fc269` (752×992,
+  30199 bytes; previously 31063 bytes at the larger size).
+- QR code inside the regenerated PNG decoded via `jsqr`: payload is exactly
+  `https://idalhamed.github.io/card`.
+- `wallet/AliHamed.pass/*.png` (all six files), every file under `docs/`,
+  and `nfc/README.md`: hashed (sha256) before and after — all byte-identical,
+  zero diffs.
+- `npm test`: **100/100 passing**, 0 failures.
+- `git status --short` after the full test run: only `scripts/make-preview.mjs`
+  and `preview/apple-wallet-pass.png` show as modified — nothing else.
+- No dependencies added. Not pushed, not merged.
