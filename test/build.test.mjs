@@ -17,10 +17,39 @@ const script = fileURLToPath(new URL('scripts/build.mjs', root));
 
 const hash = async (url) => createHash('sha256').update(await readFile(url)).digest('hex');
 
-test('the build completes and reports the Team ID as outstanding', async () => {
+// Both the "outstanding" notice and --strict's failure depend on
+// apple.teamIdentifier being UNSET. That was the repo's state early on, so
+// these tests originally just ran the real build. Once a real Pass Type ID
+// exists, config.json legitimately carries a Team ID and those assumptions
+// break. They now supply their own config instead, and restore the real
+// artifacts afterwards so the working tree stays clean.
+async function withUnsetTeamId(fn) {
+  const dir = await mkdtemp(join(tmpdir(), 'ali-card-noteam-'));
+  const configPath = join(dir, 'config.json');
+  const raw = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
+  raw.apple.teamIdentifier = '';
+  await writeFile(configPath, JSON.stringify(raw, null, 2));
+  try {
+    await fn(configPath);
+  } finally {
+    await run('node', [script]);          // rebuild from the real config
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test('the build reports the Team ID as outstanding when it is unset', async () => {
+  await withUnsetTeamId(async (configPath) => {
+    const { stdout } = await run('node', [script, '--config', configPath]);
+    assert.match(stdout, /Team ID/i, 'must tell Ali what is still missing');
+    assert.match(stdout, /Build complete/);
+  });
+});
+
+test('the build writes pass.json once a Team ID is present', async () => {
   const { stdout } = await run('node', [script]);
-  assert.match(stdout, /Team ID/i, 'must tell Ali what is still missing');
   assert.match(stdout, /Build complete/);
+  assert.doesNotMatch(stdout, /Outstanding/, 'nothing should be outstanding now');
+  await access(new URL('wallet/AliHamed.pass/pass.json', root));
 });
 
 test('leaves the live docs/ untouched when a build step fails after it would previously have been wiped', async () => {
@@ -119,9 +148,13 @@ test('writes the NFC guide with the live URL', async () => {
 });
 
 test('--strict fails while the Team ID is unset', async () => {
-  await assert.rejects(() => run('node', [script, '--strict']), (err) => {
-    assert.equal(err.code, 1, 'the notice-to-failure path exits exactly 1');
-    return true;
+  await withUnsetTeamId(async (configPath) => {
+    await assert.rejects(
+      () => run('node', [script, '--strict', '--config', configPath]),
+      (err) => {
+        assert.equal(err.code, 1, 'the notice-to-failure path exits exactly 1');
+        return true;
+      });
   });
 });
 

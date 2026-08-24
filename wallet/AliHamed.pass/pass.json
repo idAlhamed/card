@@ -1,0 +1,84 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.com.idalhamed.businesscard",
+  "teamIdentifier": "U543HGPSV8",
+  "organizationName": "Ali Hamed",
+  "serialNumber": "ali-hamed-001",
+  "description": "Ali Hamed — iOS Developer",
+  "backgroundColor": "rgb(0, 0, 0)",
+  "foregroundColor": "rgb(245, 245, 247)",
+  "labelColor": "rgb(134, 134, 139)",
+  "generic": {
+    "primaryFields": [
+      {
+        "key": "name",
+        "label": "",
+        "value": "ALI HAMED"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "role",
+        "label": "ROLE",
+        "value": "iOS Developer"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "stack",
+        "label": "TECHNOLOGIES",
+        "value": "Swift · SwiftUI · UIKit"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "message",
+        "label": "",
+        "value": "Building mobile products with a focus on performance & user experience."
+      },
+      {
+        "key": "cta",
+        "label": "",
+        "value": "Got a product to build? Let's make it happen."
+      },
+      {
+        "key": "card",
+        "label": "DIGITAL CARD",
+        "value": "https://idalhamed.github.io/card",
+        "attributedValue": "<a href=\"https://idalhamed.github.io/card\">idalhamed.github.io/card</a>"
+      },
+      {
+        "key": "linkedin",
+        "label": "LINKEDIN",
+        "value": "https://www.linkedin.com/in/idalhamed/",
+        "attributedValue": "<a href=\"https://www.linkedin.com/in/idalhamed/\">linkedin.com/in/idalhamed</a>"
+      },
+      {
+        "key": "github",
+        "label": "GITHUB",
+        "value": "https://github.com/idAlhamed",
+        "attributedValue": "<a href=\"https://github.com/idAlhamed\">github.com/idAlhamed</a>"
+      },
+      {
+        "key": "whatsapp",
+        "label": "WHATSAPP",
+        "value": "+966554248646",
+        "attributedValue": "<a href=\"https://wa.me/966554248646\">+966554248646</a>"
+      },
+      {
+        "key": "email",
+        "label": "EMAIL",
+        "value": "officialalhamed@gmail.com",
+        "attributedValue": "<a href=\"mailto:officialalhamed@gmail.com\">officialalhamed@gmail.com</a>"
+      }
+    ]
+  },
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatQR",
+      "message": "https://idalhamed.github.io/card",
+      "messageEncoding": "iso-8859-1",
+      "altText": "idalhamed.github.io/card"
+    }
+  ]
+}

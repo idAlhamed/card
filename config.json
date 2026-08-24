@@ -3,8 +3,8 @@
     "CARD_URL": "https://idalhamed.github.io/card"
   },
   "apple": {
-    "passTypeIdentifier": "pass.com.alihamed.card",
-    "teamIdentifier": "",
+    "passTypeIdentifier": "pass.com.idalhamed.businesscard",
+    "teamIdentifier": "U543HGPSV8",
     "organizationName": "Ali Hamed",
     "serialNumber": "ali-hamed-001",
     "description": "Ali Hamed — iOS Developer"
