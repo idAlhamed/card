@@ -1,0 +1,247 @@
+/* Ali Hamed — digital business card.
+   Pure monochrome. Six colour tokens, one gradient, two transitions. */
+
+:root {
+  --text-primary: #F5F5F7;
+  --text-secondary: #98989D;
+  --text-tertiary: #86868B;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-pressed: rgba(255, 255, 255, 0.08);
+
+  --radius: 14px;
+  --column: 420px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  font-family: var(--font);
+  color: var(--text-primary);
+  /* The entire depth budget: one wide radial lift on true black, so the
+     page edges are unlit pixels on an OLED display. */
+  background: radial-gradient(120% 80% at 50% 0%, #16161A 0%, #000000 62%), #000000;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--column);
+  min-height: 100dvh;
+  padding:
+    calc(env(safe-area-inset-top) + 76px)
+    calc(env(safe-area-inset-right) + 24px)
+    calc(env(safe-area-inset-bottom) + 32px)
+    calc(env(safe-area-inset-left) + 24px);
+}
+
+/* ---- Identity ---------------------------------------------------------- */
+
+.name {
+  margin: 0;
+  font-size: clamp(30px, 8.5vw, 40px);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+}
+
+.role {
+  margin: 16px 0 0;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.tech {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.rule {
+  margin: 28px 0 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ---- Pitch ------------------------------------------------------------- */
+
+.pitch { margin-top: 28px; }
+
+.message {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.cta {
+  margin: 20px 0 0;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+/* ---- Contacts ---------------------------------------------------------- */
+
+.contacts { margin-top: 40px; }
+
+.contacts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.contacts a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 0 16px;
+  font-size: 17px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background 140ms var(--ease), transform 140ms var(--ease);
+}
+
+/* Dividers inset to the label's left edge, not full bleed. */
+.contacts li + li a::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 50px;
+  border-top: 1px solid var(--hairline);
+}
+
+.contacts li:first-child a { border-radius: var(--radius) var(--radius) 0 0; }
+.contacts li:last-child  a { border-radius: 0 0 var(--radius) var(--radius); }
+
+.contacts a:active {
+  background: var(--surface-pressed);
+  transform: scale(0.99);
+}
+
+.icon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.label { flex: 1 1 auto; }
+
+.chev {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 12px;
+  fill: none;
+  stroke: var(--text-tertiary);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+}
+
+/* ---- Save Contact ------------------------------------------------------ */
+
+.save {
+  margin: 32px 0 0;
+  text-align: center;
+}
+
+.save a {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  transition: background 140ms var(--ease), color 140ms var(--ease),
+              transform 140ms var(--ease);
+}
+
+.save a:active {
+  background: var(--surface-pressed);
+  color: var(--text-primary);
+  transform: scale(0.99);
+}
+
+.dl {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+
+.footer {
+  margin-top: auto;
+  padding-top: 56px;
+}
+
+.footer p {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+/* ---- Focus ------------------------------------------------------------- */
+
+a:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---- Motion ------------------------------------------------------------ */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.identity, .rule, .pitch, .contacts, .save, .footer {
+  animation: rise 460ms var(--ease) both;
+}
+
+/* Five groups; the rule rises with the identity it belongs to. */
+.identity, .rule { animation-delay: 0ms; }
+.pitch           { animation-delay: 60ms; }
+.contacts        { animation-delay: 120ms; }
+.save            { animation-delay: 180ms; }
+.footer          { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .contacts a:active, .save a:active { transform: none; }
+}
