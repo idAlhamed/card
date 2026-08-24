@@ -28,3 +28,6 @@ npm-debug.log*
 
 # macOS
 .DS_Store
+
+# Internal build/process reports — not part of the deliverable
+.superpowers/
