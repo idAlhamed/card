@@ -30,9 +30,14 @@ const R = CARD.bleed + CARD.trimW - CARD.safe; // right safe edge: 84.6mm
 /**
  * Lays out one line of outlined type with its ink-top at `y`.
  * Returns resolved path data plus the position and fill both renderers need —
- * neither the SVG nor the PDF path recomputes this. `advance` (width) and
- * `height` are also carried so geometry tests can check the safe area
- * without re-deriving glyph metrics from the path data.
+ * neither the SVG nor the PDF path recomputes this. `advance` (width) is
+ * also carried so geometry tests can check the safe area. `inkTop`/`inkBottom`
+ * are the TRUE rendered vertical extent in absolute doc millimetres — derived
+ * from the same `dy` translate offset the renderers apply, not re-derived
+ * from `y`/`height` after the fact. For text with a descender (box.y2 != 0,
+ * e.g. "Developer", "github") reconstructing the span as `[y - height, y]`
+ * silently shifts both ends by the descender depth; reading `inkTop`/
+ * `inkBottom` directly avoids that reconstruction entirely.
  */
 async function line(text, { weight = 'semibold', size, spacing = 0, x, y, fill }) {
   const font = await loadFont(weight);
@@ -40,7 +45,11 @@ async function line(text, { weight = 'semibold', size, spacing = 0, x, y, fill }
     fontSize: size, letterSpacing: spacing,
   });
   const dy = Number((y - box.y1).toFixed(3));
-  return { d, x, y: dy, fill, advance, height: box.y2 - box.y1 };
+  return {
+    d, x, y: dy, fill, advance, height: box.y2 - box.y1,
+    inkTop: Number((dy + box.y1).toFixed(3)),
+    inkBottom: Number((dy + box.y2).toFixed(3)),
+  };
 }
 
 const QR_PANEL_RADIUS = 2;   // the one place the panel's corner radius lives

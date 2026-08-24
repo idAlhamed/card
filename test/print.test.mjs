@@ -11,11 +11,19 @@ import {
 import { qrModules } from '../src/lib/qr.mjs';
 import { validConfig } from './fixtures.mjs';
 
-// Two 1-D intervals overlap only when they share more than a touching point —
-// crop marks are deliberately anchored exactly on the trim edge, and that
-// boundary touch must not itself count as "crossing into" the trim.
+// Open-interval overlap, for element-to-element checks (text vs. QR panel)
+// where two things merely touching at an edge is an acceptable layout, not
+// a violation.
 function overlaps(aStart, aEnd, bStart, bEnd) {
   return Math.min(aEnd, bEnd) - Math.max(aStart, bStart) > 1e-9;
+}
+
+// CLOSED-interval intersection, for crop-mark-vs-trim-rectangle checks. A
+// crop mark that merely touches the trim boundary is still a line printed
+// exactly on the trim edge — visible on the finished card — so unlike
+// element-to-element overlap, a boundary touch here MUST count as a hit.
+function intersectsClosed(aStart, aEnd, bStart, bEnd) {
+  return Math.min(aEnd, bEnd) - Math.max(aStart, bStart) > -1e-9;
 }
 
 // Decompresses every FlateDecode content stream in a PDF file so the actual
@@ -124,7 +132,7 @@ test('the PDF actually strokes 8 crop marks, not merely calls the function', asy
   }
 });
 
-test('crop marks never cross into the trim rectangle', () => {
+test('crop marks never cross into the trim rectangle, not even by touching it', () => {
   const trimX = [CARD.bleed, CARD.bleed + CARD.trimW];   // 3 .. 88.6
   const trimY = [CARD.bleed, CARD.bleed + CARD.trimH];   // 3 .. 57
   const lines = cropMarkLines();
@@ -132,8 +140,24 @@ test('crop marks never cross into the trim rectangle', () => {
   for (const { x1, y1, x2, y2 } of lines) {
     const markX = [Math.min(x1, x2), Math.max(x1, x2)];
     const markY = [Math.min(y1, y2), Math.max(y1, y2)];
-    const crosses = overlaps(...markX, ...trimX) && overlaps(...markY, ...trimY);
-    assert.ok(!crosses, `crop mark (${x1},${y1})-(${x2},${y2}) crosses into the trim rectangle`);
+    // Closed-interval on purpose: a mark whose free axis runs along the trim
+    // boundary and whose fixed axis also reaches that boundary is a line
+    // physically printed on the trim edge, not merely near it.
+    const crosses = intersectsClosed(...markX, ...trimX) && intersectsClosed(...markY, ...trimY);
+    assert.ok(!crosses, `crop mark (${x1},${y1})-(${x2},${y2}) touches or crosses into the trim rectangle`);
+  }
+});
+
+test('crop-mark length is structurally shorter than the bleed, not just checked geometrically', () => {
+  // The intersection test above is the backstop; this is the invariant that
+  // should make it unreachable in practice. A mark as long as (or longer
+  // than) the bleed could run along the boundary parallel to the trim edge
+  // without the perpendicular axis ever registering an overlap — this
+  // assertion closes that gap structurally, at the source of the numbers.
+  for (const { x1, y1, x2, y2 } of cropMarkLines()) {
+    const len = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+    assert.ok(len < CARD.bleed,
+      `crop mark length ${len} must be strictly less than the bleed ${CARD.bleed}`);
   }
 });
 
@@ -145,13 +169,16 @@ test('every text element stays within the safe area', async () => {
   for (const face of ['front', 'back']) {
     const layout = await faceLayout(face, validConfig());
     for (const t of layout.texts) {
-      const top = t.y - t.height;    // ink-top, in absolute doc mm
-      const bottom = t.y;            // baseline, in absolute doc mm
+      // t.inkTop / t.inkBottom are the TRUE rendered vertical extent,
+      // read directly off the layout rather than reconstructed from
+      // y/height — a reconstruction shifts by the descender depth for any
+      // text with a descender (e.g. "Developer", "github").
       assert.ok(t.x >= safeLeft, `${face}: text left edge ${t.x} is left of the safe area`);
       assert.ok(t.x + t.advance <= safeRight,
         `${face}: text right edge ${t.x + t.advance} exceeds safe edge ${safeRight}`);
-      assert.ok(top >= safeTop, `${face}: text top ${top} is above the safe top ${safeTop}`);
-      assert.ok(bottom <= safeBottom, `${face}: text bottom ${bottom} exceeds safe bottom ${safeBottom}`);
+      assert.ok(t.inkTop >= safeTop, `${face}: text top ${t.inkTop} is above the safe top ${safeTop}`);
+      assert.ok(t.inkBottom <= safeBottom,
+        `${face}: text bottom ${t.inkBottom} exceeds safe bottom ${safeBottom}`);
     }
   }
 });
@@ -170,7 +197,7 @@ test('the QR panel lies within the safe area and overlaps no text element', asyn
 
   for (const t of texts) {
     const xHit = overlaps(t.x, t.x + t.advance, qr.panelX, qr.panelX + qr.panelSize);
-    const yHit = overlaps(t.y - t.height, t.y, qr.panelY, qr.panelY + qr.panelSize);
+    const yHit = overlaps(t.inkTop, t.inkBottom, qr.panelY, qr.panelY + qr.panelSize);
     assert.ok(!(xHit && yHit), 'a text element overlaps the QR panel');
   }
 });
