@@ -11,7 +11,11 @@ test('the root README covers running locally and deploying', async () => {
   assert.match(md, /npm run build/);
   assert.match(md, /GitHub Pages/);
   assert.match(md, /\/docs/, 'must name the Pages source folder');
-  assert.match(md, /idalhamed\.github\.io\/card/);
+  // Not pinned to today's literal domain: CARD_URL is set only in
+  // config.json, and this README quotes it purely as an example — pinning
+  // the literal here would fail npm test on nothing but a config.json edit,
+  // with a failure that looks like a config-loader bug rather than a stale doc.
+  assert.match(md, /\*\*Live:\*\*\s*https:\/\/\S+/, 'must show a live URL example');
 });
 
 test('the root README warns against committing the reference images', async () => {

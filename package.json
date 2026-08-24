@@ -6,7 +6,7 @@
   "description": "Digital business card system for Ali Hamed",
   "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node --test test/**/*.test.mjs",
+    "test": "node --test 'test/*.test.mjs'",
     "fetch:assets": "node scripts/fetch-assets.mjs",
     "build": "node scripts/build.mjs",
     "dev": "python3 -m http.server 8080 --directory docs",

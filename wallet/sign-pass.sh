@@ -24,6 +24,20 @@ command -v zip     >/dev/null 2>&1 || fail "zip was not found on PATH."
 
 Build it first:  npm run build"
 
+# A bundle without pass.json packages an inert .pkpass: Wallet rejects it on
+# the device with no diagnostic at all. build.mjs deliberately removes
+# pass.json while apple.teamIdentifier is unset, so this is the state the
+# bundle is in until the Apple steps are finished.
+[ -f "$BUNDLE_DIR/pass.json" ] || fail "The pass bundle has no pass.json:
+  $BUNDLE_DIR
+
+A pass without pass.json will not open, and Wallet reports no error.
+
+Outstanding step:
+  1. Put your 10-character Apple Team ID into apple.teamIdentifier
+     in config.json
+  2. Re-run:  npm run build"
+
 P12="$(find "$CERT_DIR" -maxdepth 1 -name '*.p12' 2>/dev/null | head -n1 || true)"
 [ -n "$P12" ] || fail "No .p12 certificate found in:
   $CERT_DIR
@@ -75,7 +89,15 @@ case "$WWDR" in
 esac
 
 mkdir -p "$WORK/pass"
-cp "$BUNDLE_DIR"/* "$WORK/pass/"
+# -R so a future subdirectory in the bundle does not abort with a raw
+# "cp: is a directory" from coreutils instead of a named guard; the glob is
+# guaranteed non-empty because pass.json is checked above, so an empty
+# bundle can no longer reach this line either.
+cp -R "$BUNDLE_DIR"/* "$WORK/pass/" \
+  || fail "Could not copy the pass bundle from:
+  $BUNDLE_DIR
+
+Rebuild it:  npm run build"
 rm -f "$WORK/pass/manifest.json" "$WORK/pass/signature"
 
 # manifest.json maps every filename to the SHA-1 of its contents.

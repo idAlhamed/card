@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { wordmarkSVG } from './text-path.mjs';
+import { monogram } from './pass.mjs';
 
 // Hand-authored glyphs live in src/icons; vendored brand marks in vendor/icons.
 const ICON_DIRS = [
@@ -50,9 +51,13 @@ export async function stampHTML(html, config) {
   return out;
 }
 
-/** 180x180 Add-to-Home-Screen icon: "AH" centred on black. */
-export async function renderTouchIcon() {
-  const mark = await wordmarkSVG('AH', {
+// Reads the monogram from config.content.name rather than hardcoding it, so
+// editing the name in config.json doesn't leave the touch icon silently
+// stale (the same drift class fixed for the pass logo in pass.mjs, whose
+// monogram() this reuses rather than duplicating).
+/** 180x180 Add-to-Home-Screen icon: the name's monogram centred on black. */
+export async function renderTouchIcon(config) {
+  const mark = await wordmarkSVG(monogram(config.content.name), {
     fontSize: 74, letterSpacing: 3, fill: '#F5F5F7',
   });
   return sharp({

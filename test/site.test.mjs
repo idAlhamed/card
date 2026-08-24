@@ -38,9 +38,30 @@ test('throws when any token survives', async () => {
 });
 
 test('renders a 180x180 touch icon', async () => {
-  const meta = await sharp(await renderTouchIcon()).metadata();
+  const meta = await sharp(await renderTouchIcon(validConfig())).metadata();
   assert.equal(meta.width, 180);
   assert.equal(meta.height, 180);
+});
+
+test('renderTouchIcon reads the monogram from config.content.name, not a hardcoded "AH"', async () => {
+  const ali = validConfig(); // 'ALI HAMED' -> AH, same as the old hardcoded value
+  const adam = validConfig();
+  adam.content.name = 'Adam Harris'; // different full name, same AH monogram
+  const jane = validConfig();
+  jane.content.name = 'Jane Doe'; // different monogram entirely
+
+  const [aliIcon, adamIcon, janeIcon] = await Promise.all([
+    renderTouchIcon(ali), renderTouchIcon(adam), renderTouchIcon(jane),
+  ]);
+
+  assert.ok(
+    aliIcon.equals(adamIcon),
+    'ALI HAMED and Adam Harris both derive the AH monogram and must render byte-identical icons'
+  );
+  assert.ok(
+    !aliIcon.equals(janeIcon),
+    'a different monogram must render a different icon'
+  );
 });
 
 test('renders a 1200x630 OG image', async () => {

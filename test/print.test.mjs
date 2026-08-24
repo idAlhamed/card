@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import {
   buildCardSVG, buildCardPDF, CARD, DOC_W, DOC_H, RICH_BLACK_CMYK,
   faceLayout, cropMarkLines,
 } from '../src/lib/print.mjs';
-import { qrModules } from '../src/lib/qr.mjs';
+import { qrModules, decodeQRPNG } from '../src/lib/qr.mjs';
 import { validConfig } from './fixtures.mjs';
 
 // Open-interval overlap, for element-to-element checks (text vs. QR panel)
@@ -80,6 +81,38 @@ test('type is outlined, never live text', async () => {
 test('the QR meets the 18mm scanning minimum', async () => {
   assert.ok(CARD.qrSize >= 18, 'QR must be at least 18mm to scan reliably');
   assert.ok(CARD.qrPanel > CARD.qrSize, 'the panel must provide a quiet zone');
+});
+
+test('the quiet zone around the printed QR is at least 4 modules deep', async () => {
+  // A panel merely larger than the QR (the check above) is not enough: a
+  // 24mm panel would satisfy "> qrSize" and still ship an unreliable card.
+  // The QR spec's minimum quiet zone is 4 modules of the QR's own module
+  // size, not a fixed millimetre margin.
+  const { size } = qrModules(validConfig().url.CARD_URL);
+  const moduleSize = CARD.qrSize / size;
+  const quietZone = (CARD.qrPanel - CARD.qrSize) / 2;
+  assert.ok(
+    quietZone >= 4 * moduleSize,
+    `quiet zone ${quietZone}mm is less than the 4-module minimum ` +
+    `(${(4 * moduleSize).toFixed(2)}mm at ${moduleSize.toFixed(3)}mm/module)`
+  );
+});
+
+// The round-trip guard in qr.mjs (assertQRRoundTrip) is exercised in
+// scripts/build.mjs only against the reversible web asset (generateQRPNG).
+// The print path is a separate rendering pipeline — qrLayout() ->
+// qrModules() -> hand-drawn rectangles in qrToSVG/buildCardPDF — and a
+// transposed index, wrong origin, or off-by-one in module size there would
+// produce a dead printed code while still passing the "every dark QR module
+// is drawn" count test above (a transpose preserves the module count
+// exactly). This test rasterises the actual print SVG and decodes it, so a
+// broken print QR can no longer reach a printer undetected.
+test('the printed QR (rasterised from the print SVG at print density) decodes back to CARD_URL', async () => {
+  const config = validConfig();
+  const svg = await buildCardSVG('back', config);
+  const png = await sharp(Buffer.from(svg), { density: 300 }).png().toBuffer();
+  const decoded = await decodeQRPNG(png);
+  assert.equal(decoded, config.url.CARD_URL);
 });
 
 test('the QR sits on a light panel, not inverted on black', async () => {

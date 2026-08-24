@@ -100,6 +100,23 @@ test('escapes " and & in back-field href/text so the anchor cannot break out', (
   assert.equal(field.value, 'ali"o&reilly@example.com');
 });
 
+test('the LinkedIn and GitHub back-field labels are derived from config, not hardcoded', () => {
+  const c = validConfig();
+  c.contacts.linkedin = 'https://www.linkedin.com/in/someoneelse/';
+  c.contacts.github = 'https://github.com/SomeoneElse';
+  const back = buildPassJSON(c).generic.backFields;
+
+  const linkedin = back.find((f) => f.key === 'linkedin');
+  const github = back.find((f) => f.key === 'github');
+
+  // The visible label must track the href it navigates to, or a config edit
+  // yields a pass that displays one identity and navigates to another.
+  assert.match(linkedin.attributedValue, /^<a href="[^"]*">linkedin\.com\/in\/someoneelse<\/a>$/);
+  assert.match(github.attributedValue, /^<a href="[^"]*">github\.com\/SomeoneElse<\/a>$/);
+  assert.doesNotMatch(linkedin.attributedValue, /idalhamed/i);
+  assert.doesNotMatch(github.attributedValue, /idAlhamed/);
+});
+
 test('renders all six required assets at exact sizes', async () => {
   const assets = await renderPassAssets(validConfig());
   const expected = {

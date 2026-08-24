@@ -24,6 +24,17 @@ function escapeHtml(text) {
 
 const link = (href, text) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
 
+// Same derivation pattern as `short` below: a link label read from the
+// config value it points at, not a literal, so editing config.json can
+// never leave a pass that displays one identity and navigates to another.
+// Strips the scheme, an optional leading "www.", and a trailing slash.
+function shortUrl(href) {
+  return String(href)
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/$/, '');
+}
+
 export function buildPassJSON(config) {
   const { apple, content, contacts, url } = config;
 
@@ -78,12 +89,12 @@ export function buildPassJSON(config) {
         {
           key: 'linkedin', label: 'LINKEDIN',
           value: contacts.linkedin,
-          attributedValue: link(contacts.linkedin, 'linkedin.com/in/idalhamed'),
+          attributedValue: link(contacts.linkedin, shortUrl(contacts.linkedin)),
         },
         {
           key: 'github', label: 'GITHUB',
           value: contacts.github,
-          attributedValue: link(contacts.github, 'github.com/idAlhamed'),
+          attributedValue: link(contacts.github, shortUrl(contacts.github)),
         },
         {
           key: 'whatsapp', label: 'WHATSAPP',
@@ -114,7 +125,7 @@ const RENDER_SIZE = 240;
 // First letter of each of the first two whitespace-separated words,
 // uppercased. 'ALI HAMED' -> 'AH'. A single-word name still yields a
 // (one-letter) monogram rather than throwing.
-function monogram(name) {
+export function monogram(name) {
   const words = String(name).trim().split(/\s+/).filter(Boolean);
   return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 }

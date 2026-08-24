@@ -67,7 +67,7 @@ try {
   await writeFile(inStaging('assets/qr.svg'), await generateQRSVG(CARD_URL));
   console.log('  docs/assets/qr.{png,svg}  (round-trip verified, staged)');
 
-  await writeFile(inStaging('assets/apple-touch-icon.png'), await renderTouchIcon());
+  await writeFile(inStaging('assets/apple-touch-icon.png'), await renderTouchIcon(config));
   await writeFile(inStaging('assets/og.png'), await renderOGImage(config));
   console.log('  docs/assets/apple-touch-icon.png, og.png  (staged)');
 } catch (err) {

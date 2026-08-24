@@ -3,12 +3,10 @@
 `card-front.pdf` and `card-back.pdf` are the files to send a printer.
 The `.svg` versions are for previewing and for designers who want to edit.
 
-Regenerate with `npm run build`. Each build re-stamps the PDFs with a fresh
-creation timestamp and document ID (PDFKit does this automatically), so
-`npm run build` will show `print/card-*.pdf` as changed in `git status` even
-when the artwork itself did not change. That's expected, not a sign anything
-drifted — compare the `.svg` files if you want to confirm the visible content
-is identical.
+Regenerate with `npm run build`. Builds are byte-reproducible: rebuilding
+from an unchanged `config.json` writes identical bytes. So if `git status`
+shows `card-*.pdf` as changed, the artwork genuinely changed — review the
+diff before ordering cards.
 
 ## Specifications
 

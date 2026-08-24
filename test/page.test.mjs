@@ -5,6 +5,9 @@ import { loadConfig } from '../src/lib/config.mjs';
 
 const src = (f) => readFile(new URL(`../src/${f}`, import.meta.url), 'utf8');
 
+// A comparison normaliser for matching config values against authored HTML
+// in src/index.html — not an output escaper (unlike pass.mjs's escapeHtml,
+// which produces HTML this project actually ships).
 const escapeHTML = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // The page uses a typographic apostrophe; config uses a straight one.
 const normalise = (s) => s.replace(/[‘’]/g, "'");

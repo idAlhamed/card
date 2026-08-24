@@ -7,9 +7,11 @@ Wallet pass, print artwork, and an NFC tag — all resolving to one URL.
 
 ## The one thing to know
 
-`config.json` is the single source of truth. `CARD_URL` lives there and nowhere
-else. Change it, run `npm run build`, and the QR code, Wallet pass, vCard,
-canonical tags, print artwork, and NFC instructions all follow.
+`config.json` is the single source of truth: `CARD_URL` is **set** only
+there. This README and `print/README.md` quote today's value below as an
+example, not as a second source — change it in `config.json`, run `npm run
+build`, and the QR code, Wallet pass, vCard, canonical tags, print artwork,
+and NFC instructions all follow.
 
 ## Setup
 
@@ -49,10 +51,10 @@ If `config.json` is missing a required field or malformed, `npm run build`
 prints a plain description of what's wrong and exits with status 1. It does
 not throw a stack trace.
 
-Note that `print/card-*.pdf` will show as changed in `git status` after every
-build even when nothing visible changed — PDFKit stamps each PDF with the
-current timestamp and a fresh document ID on every run. That's expected; it
-is not a sign the artwork drifted.
+Builds are byte-reproducible: rebuilding from an unchanged `config.json`
+rewrites `print/card-*.pdf` with identical bytes. So if `git status` shows
+`print/card-*.pdf` as changed, the artwork genuinely changed — review the
+diff before ordering cards.
 
 ## Deploying
 
@@ -107,8 +109,9 @@ disagree, so the duplication cannot drift silently.
 
     npm test
 
-This runs `node --test test/**/*.test.mjs`. (Plain `node --test test/` does
-not work on this project's Node version — always use `npm test`.)
+This runs `node --test 'test/*.test.mjs'`, quoted so the shell never expands
+the glob itself. (Plain `node --test test/` does not work on this project's
+Node version — always use `npm test`.)
 
 ## Other guides
 
