@@ -1,6 +1,6 @@
 // One-time vendoring. Downloads are pinned to exact tags so the build is
 // reproducible. Re-running is safe and idempotent.
-import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,24 @@ async function fetchInter() {
     // expected, not fatal. Only re-throw for a genuine failure.
     if (err.code !== 11) throw err;
   }
+
+  // unzip's exit code alone doesn't prove the fonts landed — exit 11 fires for
+  // ANY unmatched pattern, and the code above tolerates it broadly (it only
+  // ever expects *OFL.txt to miss). If a future release renames or drops
+  // Inter-Regular.ttf or Inter-SemiBold.ttf, that too would exit 11 and get
+  // swallowed above. So verify the fonts actually exist before declaring
+  // success — never proceed with a missing font.
+  for (const f of ['Inter-Regular.ttf', 'Inter-SemiBold.ttf']) {
+    try {
+      await access(new URL(f, fontDir));
+    } catch {
+      throw new Error(
+        `unzip reported no match for ${f}. The Inter release layout may have ` +
+        `changed. Extract it manually — see the fallback instructions below.`
+      );
+    }
+  }
+
   await rm(zipPath);
 
   // The zip names its licence LICENSE.txt in some releases; normalise it.
