@@ -10,7 +10,8 @@
     "fetch:assets": "node scripts/fetch-assets.mjs",
     "build": "node scripts/build.mjs",
     "dev": "python3 -m http.server 8080 --directory docs",
-    "pass:sign": "bash wallet/sign-pass.sh"
+    "pass:sign": "bash wallet/sign-pass.sh",
+    "preview:pass": "node scripts/make-preview.mjs"
   },
   "devDependencies": {
     "jsqr": "^1.4.0",

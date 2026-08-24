@@ -77,6 +77,36 @@ test('the built page carries the real URL and no surviving tokens', async () => 
   assert.match(html, /<svg class="icon"/, 'icons must be inlined');
 });
 
+// Pins docs/index.html — the BUILT page — as the one that must have inlined
+// icons and no template tokens. This has been mistaken for src/index.html
+// (the authored template, which correctly still contains {{ICON:...}}
+// tokens) twice; this test names the built file explicitly so that
+// confusion can't recur silently.
+test('the built page renders four inline icons and no unresolved tokens', async () => {
+  const html = await readFile(new URL('docs/index.html', root), 'utf8');
+  const config = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
+
+  const iconMatches = html.match(/<svg class="icon"/g) ?? [];
+  assert.equal(iconMatches.length, 4, 'expected exactly 4 inline icon svgs in the built page');
+
+  const tokenMatches = html.match(/\{\{/g) ?? [];
+  assert.equal(tokenMatches.length, 0, 'no unresolved {{...}} template tokens in the built page');
+
+  assert.doesNotMatch(html, /&lt;svg/, 'icon markup must be inlined, not HTML-escaped');
+  assert.doesNotMatch(html, /&lt;path/, 'icon markup must be inlined, not HTML-escaped');
+
+  for (const href of [
+    config.contacts.linkedin,
+    config.contacts.github,
+    config.contacts.whatsapp,
+    `mailto:${config.contacts.email}`,
+  ]) {
+    const needle = `href="${href}"`;
+    const occurrences = html.split(needle).length - 1;
+    assert.equal(occurrences, 1, `expected exactly one ${needle} in the built page`);
+  }
+});
+
 test('produces the pass assets even without a Team ID', async () => {
   for (const f of ['icon.png', 'logo.png', 'logo@3x.png']) {
     await assert.doesNotReject(access(new URL(`wallet/AliHamed.pass/${f}`, root)));
