@@ -4,8 +4,8 @@ import { validateConfig, loadConfig, ConfigError } from '../src/lib/config.mjs';
 import { validConfig } from './fixtures.mjs';
 
 test('accepts a valid config', () => {
-  assert.equal(validateConfig(validConfig()).url.CARD_URL,
-    'https://idalhamed.github.io/card');
+  const c = validConfig();
+  assert.equal(validateConfig(c).url.CARD_URL, c.url.CARD_URL);
 });
 
 test('rejects a missing CARD_URL', () => {
@@ -52,6 +52,9 @@ test('names the exact missing content key', () => {
 
 test('loads and validates the real config.json', async () => {
   const c = await loadConfig();
-  assert.equal(c.url.CARD_URL, 'https://idalhamed.github.io/card');
+  const url = new URL(c.url.CARD_URL);          // throws if unparseable
+  assert.equal(url.protocol, 'https:');
+  assert.doesNotMatch(c.url.CARD_URL, /YOUR_|REPLACE_|EXAMPLE|CHANGEME/i);
+  // Copy is genuinely fixed by the spec; the URL genuinely is not.
   assert.equal(c.content.technologies, 'Swift · SwiftUI · UIKit');
 });
