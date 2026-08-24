@@ -63,29 +63,51 @@ async function main() {
   previewConfig.apple.teamIdentifier = 'XXXXXXXXXX';
 
   const pass = buildPassJSON(previewConfig);
-  const primary = pass.generic.primaryFields[0];
-  const secondary = pass.generic.secondaryFields[0];
+  const primary = pass.generic.primaryFields[0];   // name
+  const secondary = pass.generic.secondaryFields[0]; // role
+  const auxiliary = pass.generic.auxiliaryFields[0];  // technologies
 
   const logoBuffer = await loadLogo();
   const logoMeta = await sharp(logoBuffer).metadata();
   // Fit the logo into a top strip, scaled down from its native 320x100 so
-  // it reads as a header rather than dominating the card.
+  // it reads as a header rather than dominating the card. The logo is now
+  // the Apple-mark + "BUSINESS CARD" title, not the name (see
+  // src/lib/pass.mjs renderLogo) — it must stay quiet up here.
   const logoHeight = 44;
   const logoWidth = Math.round((logoMeta.width / logoMeta.height) * logoHeight);
   const logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
 
-  const [primarySVG, labelSVG, secondarySVG] = await Promise.all([
-    wordmarkSVG(primary.value, { fontSize: 52, fill: pass.foregroundColor }),
+  // The name is the primaryField now, so it renders at primaryField size —
+  // far larger than the 18.8pt the 160x50pt logo slot ever allowed. 0.08em
+  // tracking is unchanged from the old logo rendering (client request: keep
+  // the current restrained tracking) — at this larger size it's the same
+  // relative letterspacing, just no longer width-constrained to 160pt.
+  const primaryFontSize = 80;
+  const [primarySVG, roleLabelSVG, roleValueSVG, stackLabelSVG, stackValueSVG] = await Promise.all([
+    wordmarkSVG(primary.value, { fontSize: primaryFontSize, letterSpacing: primaryFontSize * 0.08, fill: pass.foregroundColor }),
     wordmarkSVG(secondary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
-    wordmarkSVG(secondary.value, { weight: 'regular', fontSize: 26, fill: pass.foregroundColor }),
+    wordmarkSVG(secondary.value, { weight: 'regular', fontSize: 24, fill: pass.foregroundColor }),
+    wordmarkSVG(auxiliary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
+    wordmarkSVG(auxiliary.value, { weight: 'regular', fontSize: 20, fill: pass.foregroundColor }),
   ]);
 
   const primaryY = PAD + logoHeight + 56;
   const primaryPlaced = place(primarySVG, PAD, primaryY);
-  const labelY = primaryY + primaryPlaced.height + 48;
-  const labelPlaced = place(labelSVG, PAD, labelY);
-  const secondaryY = labelY + labelPlaced.height + 12;
-  const secondaryPlaced = place(secondarySVG, PAD, secondaryY);
+
+  // Secondary (ROLE) and auxiliary (TECHNOLOGIES) fields sit side by side
+  // in a row beneath the primary field, mirroring how Wallet lays out a
+  // generic pass's secondaryFields/auxiliaryFields row.
+  const fieldsY = primaryY + primaryPlaced.height + 48;
+  const leftColX = PAD;
+  const rightColX = CARD_W / 2 + 12;
+
+  const roleLabelPlaced = place(roleLabelSVG, leftColX, fieldsY);
+  const roleValueY = fieldsY + roleLabelPlaced.height + 12;
+  const roleValuePlaced = place(roleValueSVG, leftColX, roleValueY);
+
+  const stackLabelPlaced = place(stackLabelSVG, rightColX, fieldsY);
+  const stackValueY = fieldsY + stackLabelPlaced.height + 12;
+  const stackValuePlaced = place(stackValueSVG, rightColX, stackValueY);
 
   // Barcode: a QR generated from the pass's own barcode message (mirroring
   // how Wallet renders the barcode itself), sat in a white rounded panel
@@ -105,8 +127,10 @@ async function main() {
       <image x="${PAD}" y="${PAD}" width="${logoWidth}" height="${logoHeight}"
              href="${logoDataUri}" />
       ${primaryPlaced.markup}
-      ${labelPlaced.markup}
-      ${secondaryPlaced.markup}
+      ${roleLabelPlaced.markup}
+      ${roleValuePlaced.markup}
+      ${stackLabelPlaced.markup}
+      ${stackValuePlaced.markup}
       <rect x="${panelX}" y="${panelY}" width="${panelSize}" height="${panelSize}"
             rx="16" ry="16" fill="#FFFFFF" />
       <image x="${panelX + panelPad}" y="${panelY + panelPad}" width="${qrSize}" height="${qrSize}"

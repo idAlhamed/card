@@ -45,16 +45,26 @@ test('uses the spec colours, in Apple\'s documented spaced rgb() format', () => 
   assert.equal(p.labelColor, 'rgb(134, 134, 139)');
 });
 
-test('the primary field is the role, not the name', () => {
-  const p = buildPassJSON(validConfig());
-  assert.equal(p.generic.primaryFields[0].value, 'iOS Developer');
-  const all = JSON.stringify(p.generic.primaryFields);
-  assert.doesNotMatch(all, /ALI HAMED/, 'the name belongs in logo.png, not a field');
+test('the primary field is the name, rendered at primary-field size', () => {
+  const c = validConfig();
+  const p = buildPassJSON(c);
+  // logo.png's 160x50pt slot can only ever fit the name at ~19pt; the
+  // primaryFields slot is how the name actually reads large on the pass.
+  assert.equal(p.generic.primaryFields[0].value, c.content.name);
 });
 
-test('technologies appear with preserved casing', () => {
-  const p = buildPassJSON(validConfig());
-  assert.equal(p.generic.secondaryFields[0].value, 'Swift · SwiftUI · UIKit');
+test('the role is a secondary field, labelled ROLE', () => {
+  const c = validConfig();
+  const p = buildPassJSON(c);
+  assert.equal(p.generic.secondaryFields[0].value, c.content.role);
+  assert.equal(p.generic.secondaryFields[0].label, 'ROLE');
+});
+
+test('technologies appear as an auxiliary field with preserved casing', () => {
+  const c = validConfig();
+  const p = buildPassJSON(c);
+  assert.equal(p.generic.auxiliaryFields[0].value, c.content.technologies);
+  assert.equal(p.generic.auxiliaryFields[0].label, 'TECHNOLOGIES');
 });
 
 test('all four contacts are tappable on the back', () => {
@@ -132,7 +142,13 @@ test('renders all six required assets at exact sizes', async () => {
   }
 });
 
-test('renderPassAssets reads the wordmark from config.content.name, not a hardcoded value', async () => {
+test('renderPassAssets reads the monogram from config.content.name, not a hardcoded value', async () => {
+  // logo.png is now a fixed "Apple mark + BUSINESS CARD" title (see
+  // renderLogo) and no longer varies with the name at all — the name moved
+  // to primaryFields in pass.json instead (asserted separately above). The
+  // drift risk this test originally guarded against — a name edited in
+  // config.json silently not reaching a rendered pass asset — now lives in
+  // icon.png (the AH monogram), so that's what this asserts against.
   const ali = validConfig();
   const jane = validConfig();
   jane.content.name = 'JANE DOE';
@@ -143,8 +159,12 @@ test('renderPassAssets reads the wordmark from config.content.name, not a hardco
   ]);
 
   assert.ok(
-    !aliAssets.get('logo.png').equals(janeAssets.get('logo.png')),
-    'a name edited in config.json must change the rendered logo, or Ali\'s pass silently drifts from his config'
+    !aliAssets.get('icon.png').equals(janeAssets.get('icon.png')),
+    'a name edited in config.json must change the rendered icon, or Ali\'s pass silently drifts from his config'
+  );
+  assert.ok(
+    aliAssets.get('logo.png').equals(janeAssets.get('logo.png')),
+    'logo.png is now a fixed title (Apple mark + BUSINESS CARD) and must not vary with the name'
   );
 });
 

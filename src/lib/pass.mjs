@@ -71,12 +71,18 @@ export function buildPassJSON(config) {
     labelColor: 'rgb(134, 134, 139)',
 
     generic: {
-      // The name is carried by logo.png: it is the only element visible when
-      // passes are stacked in Wallet. That leaves the role the largest type.
+      // The name lives in primaryFields, where Wallet renders it at
+      // primary-field size — far larger than the 160x50pt logo slot could
+      // ever fit it at. logo.png instead carries a small Apple mark +
+      // "BUSINESS CARD" title (see renderLogo below), which is what
+      // identifies the pass by type when passes are stacked in Wallet.
       primaryFields: [
-        { key: 'role', label: '', value: content.role },
+        { key: 'name', label: '', value: content.name },
       ],
       secondaryFields: [
+        { key: 'role', label: 'ROLE', value: content.role },
+      ],
+      auxiliaryFields: [
         { key: 'stack', label: 'TECHNOLOGIES', value: content.technologies },
       ],
       backFields: [
@@ -142,38 +148,123 @@ async function renderIcon(size, initials) {
   }).composite([{ input: glyph, gravity: 'centre' }]).png().toBuffer();
 }
 
-// Transparent background: Wallet composites the logo onto backgroundColor.
+// logo.png is now the pass TITLE, not the name: a small Apple mark followed
+// by "BUSINESS CARD", in labelColor, so the pass reads as a quiet category
+// label when stacked among other passes in Wallet — that's what identifies
+// it by type. The name itself moved to primaryFields (see buildPassJSON),
+// where Wallet renders it far larger than the 18.8pt the 160x50pt logo slot
+// ever allowed at 0.08em tracking.
 //
-// letterSpacing is 0.08em, not the 0.14em used for the web-page wordmark
-// (design spec §5.3 fixes 0.14em there specifically). The logo slot is
-// 160x50pt and "ALI HAMED" is ~9:1, so the fit here is width-constrained:
-// it fills the full width and uses only ~17pt of the 50pt height. Under a
-// width-constrained fit, tighter tracking renders the glyphs larger at
-// equal cap height, which matters because this strip is the only part of
-// a pass visible when passes are stacked in Wallet. Spec §7.3 asks only
-// for a "fine-tracked wordmark" on the pass, which 0.08em satisfies.
-async function renderLogo(text, width, height) {
-  const mark = await wordmarkSVG(text, {
-    fontSize: RENDER_SIZE, letterSpacing: RENDER_SIZE * 0.08, fill: '#F5F5F7',
+// rgb(134, 134, 139) as a hex literal, so this file doesn't need to import
+// or duplicate the rgb() string used for pass.json's labelColor.
+const LABEL_COLOR = '#86868B';
+
+const LOGO_TITLE = 'BUSINESS CARD';
+
+// 0.12em, matching the tracking used for other small-caps label text in
+// this system (e.g. a "TECHNOLOGIES" caption) — tight enough to read as a
+// caption, not a wordmark competing with the name.
+const LOGO_TITLE_TRACKING = 0.12;
+
+// The Apple mark + "BUSINESS CARD" together sit at roughly this cap height
+// inside the 50pt-tall logo slot (~11pt of 50pt): within the client's
+// requested "10-12pt" range, small and quiet enough not to compete with
+// the primaryField name.
+const LOGO_CAP_HEIGHT_RATIO = 11 / 50;
+// Gap between the Apple mark and "BUSINESS CARD", as a fraction of the
+// 160pt-wide slot.
+const LOGO_GAP_RATIO = 6 / 160;
+
+// U+F8FF PRIVATE USE ONE, the Apple logo glyph. Written as an escape, not a
+// literal character, so the source file can't have this glyph silently
+// mangled or dropped by an editor, terminal, or git filter that doesn't
+// round-trip Private Use Area code points reliably.
+const APPLE_LOGO_GLYPH = '\uF8FF';
+
+// Renders the real Apple mark via the macOS system "Apple Symbols" font,
+// which contains U+F8FF. Inter — the only font vendored into this repo —
+// does not contain this glyph (verified: glyph index 0), and there is no
+// legitimate alternative: hand-drawing an apple shape would redraw Apple's
+// trademark from scratch, and vendoring an Apple-supplied logo image into
+// the repo would redistribute it. Rendering the real glyph from the
+// operating system's own font at build time, on the client's own Mac, is
+// the defensible path — but it means logo.png depends on a font that only
+// ships with macOS, so the asset is not guaranteed byte-reproducible on a
+// machine without it.
+//
+// If "Apple Symbols" is missing, SVG text rendering doesn't throw — it
+// silently falls back to a missing-glyph box or empty output. So this
+// renders a probe glyph first and measures its ink coverage: a real Apple
+// mark covers a substantial fraction of its probe canvas; a fallback covers
+// close to none. Below that threshold this throws loudly rather than
+// shipping a broken pass title.
+async function renderAppleMark(targetHeight) {
+  const probeSize = 200;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${probeSize}" height="${probeSize}">` +
+    `<text x="0" y="${Math.round(probeSize * 0.82)}" font-family="Apple Symbols" ` +
+    `font-size="${probeSize}" fill="${LABEL_COLOR}">${APPLE_LOGO_GLYPH}</text></svg>`;
+  const rendered = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer();
+
+  const { data, info } = await sharp(rendered).raw().toBuffer({ resolveWithObject: true });
+  let opaquePixels = 0;
+  for (let i = 3; i < data.length; i += info.channels) {
+    if (data[i] > 16) opaquePixels++;
+  }
+  const coverage = opaquePixels / (info.width * info.height);
+  if (coverage < 0.03) {
+    throw new Error(
+      'Rendering the Apple logo glyph (U+F8FF) produced almost no visible ' +
+      'pixels. "Apple Symbols" is likely unavailable on this machine, so ' +
+      'the renderer fell back to a missing-glyph box instead of the real ' +
+      'mark. wallet/AliHamed.pass/logo.png cannot be built without it — ' +
+      'this build must run on a Mac with the system font installed.'
+    );
+  }
+
+  return sharp(rendered).trim().resize({ height: targetHeight }).png().toBuffer();
+}
+
+async function renderLogoTitle(targetHeight) {
+  const svg = await wordmarkSVG(LOGO_TITLE, {
+    fontSize: RENDER_SIZE, letterSpacing: RENDER_SIZE * LOGO_TITLE_TRACKING, fill: LABEL_COLOR,
   });
-  const fitted = await sharp(Buffer.from(mark))
-    .resize({ width, height, fit: 'inside' })
-    .png().toBuffer();
-  const { height: fh } = await sharp(fitted).metadata();
+  return sharp(Buffer.from(svg)).resize({ height: targetHeight }).png().toBuffer();
+}
+
+// Transparent background: Wallet composites the logo onto backgroundColor.
+// The mark and title are rendered at a matched cap height, left-aligned
+// flush to the slot's left edge, and vertically centred as a pair — small
+// and quiet, so it reads as a title, not a second headline.
+async function renderLogo(width, height) {
+  const capHeight = Math.round(height * LOGO_CAP_HEIGHT_RATIO);
+  const gap = Math.round(width * LOGO_GAP_RATIO);
+
+  const [mark, title] = await Promise.all([
+    renderAppleMark(capHeight),
+    renderLogoTitle(capHeight),
+  ]);
+  const { width: markWidth } = await sharp(mark).metadata();
+  const top = Math.round((height - capHeight) / 2);
+
   return sharp({
     create: {
       width, height, channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   })
-    .composite([{ input: fitted, left: 0, top: Math.round((height - fh) / 2) }])
+    .composite([
+      { input: mark, left: 0, top },
+      { input: title, left: markWidth + gap, top },
+    ])
     .png().toBuffer();
 }
 
 // Reads the wordmark from config.content.name rather than hardcoding it, so
-// editing the name in config.json doesn't leave the pass logo silently
+// editing the name in config.json doesn't leave the pass icon silently
 // stale (the same drift class fixed elsewhere for vCard escaping, the OG
-// bounds guard, and the icon error messages).
+// bounds guard, and the icon error messages). logo.png no longer carries
+// the name at all — see renderLogo above — so icon.png (the AH monogram)
+// is now the only pass image that varies with config.content.name.
 export async function renderPassAssets(config) {
   const name = config.content.name;
   const initials = monogram(name);
@@ -181,8 +272,8 @@ export async function renderPassAssets(config) {
     ['icon.png', await renderIcon(29, initials)],
     ['icon@2x.png', await renderIcon(58, initials)],
     ['icon@3x.png', await renderIcon(87, initials)],
-    ['logo.png', await renderLogo(name, 160, 50)],
-    ['logo@2x.png', await renderLogo(name, 320, 100)],
-    ['logo@3x.png', await renderLogo(name, 480, 150)],
+    ['logo.png', await renderLogo(160, 50)],
+    ['logo@2x.png', await renderLogo(320, 100)],
+    ['logo@3x.png', await renderLogo(480, 150)],
   ]);
 }
