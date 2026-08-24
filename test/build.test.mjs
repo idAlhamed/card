@@ -77,12 +77,6 @@ test('the built page carries the real URL and no surviving tokens', async () => 
   assert.match(html, /<svg class="icon"/, 'icons must be inlined');
 });
 
-test('produces the print artwork', async () => {
-  for (const f of ['card-front.svg', 'card-back.svg', 'card-front.pdf', 'card-back.pdf']) {
-    await assert.doesNotReject(access(new URL(`print/${f}`, root)), `missing print/${f}`);
-  }
-});
-
 test('produces the pass assets even without a Team ID', async () => {
   for (const f of ['icon.png', 'logo.png', 'logo@3x.png']) {
     await assert.doesNotReject(access(new URL(`wallet/AliHamed.pass/${f}`, root)));

@@ -1,17 +1,22 @@
 # Ali Hamed — Digital Business Card
 
 A premium black professional identity system: a mobile-first web page, an Apple
-Wallet pass, print artwork, and an NFC tag — all resolving to one URL.
+Wallet pass, and an NFC tag — all resolving to one URL.
 
 **Live:** https://idalhamed.github.io/card
+
+> **Scope note:** the physical print artwork (`print/`) described in
+> `spec/2026-08-24-ali-hamed-digital-business-card-design.md` was removed at
+> the client's request. The project is now digital-only: web page, Wallet
+> pass, and NFC tag. The spec and plan documents are left as-is as a
+> historical record of the original, larger scope.
 
 ## The one thing to know
 
 `config.json` is the single source of truth: `CARD_URL` is **set** only
-there. This README and `print/README.md` quote today's value below as an
-example, not as a second source — change it in `config.json`, run `npm run
-build`, and the QR code, Wallet pass, vCard, canonical tags, print artwork,
-and NFC instructions all follow.
+there. This README quotes today's value below as an example, not as a
+second source — change it in `config.json`, run `npm run build`, and the QR
+code, Wallet pass, vCard, canonical tags, and NFC instructions all follow.
 
 ## Setup
 
@@ -39,7 +44,7 @@ Develop > Enter Responsive Design Mode, and pick an iPhone. Better still, run
     npm run build
 
 The build writes everything: `docs/` (the site), `wallet/AliHamed.pass/`,
-`print/card-{front,back}.{svg,pdf}`, and `nfc/README.md`.
+and `nfc/README.md`.
 
 The site build is **atomic**. It stages the entire site into `docs.tmp/`
 first and only removes the old `docs/` and renames the staged copy into place
@@ -50,11 +55,6 @@ site.
 If `config.json` is missing a required field or malformed, `npm run build`
 prints a plain description of what's wrong and exits with status 1. It does
 not throw a stack trace.
-
-Builds are byte-reproducible: rebuilding from an unchanged `config.json`
-rewrites `print/card-*.pdf` with identical bytes. So if `git status` shows
-`print/card-*.pdf` as changed, the artwork genuinely changed — review the
-diff before ordering cards.
 
 ## Deploying
 
@@ -88,7 +88,6 @@ Every later deploy is `npm run build`, commit, push.
 | `src/` | Authored page and library modules |
 | `docs/` | **Generated.** What GitHub Pages serves. Do not edit by hand. |
 | `wallet/` | Pass bundle, signing script, and instructions |
-| `print/` | Print-ready front and back artwork |
 | `nfc/` | **Generated.** Tag programming instructions. |
 | `spec/`, `plan/` | Design specification and implementation plan |
 
@@ -116,5 +115,4 @@ Node version — always use `npm test`.)
 ## Other guides
 
 - `wallet/README.md` — creating, signing, and installing the Wallet pass
-- `print/README.md` — printer specifications
 - `nfc/README.md` — programming the NFC tag

@@ -1,11 +1,10 @@
 import { mkdir, writeFile, rm, copyFile, readFile, rename } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { loadConfig, ConfigError } from '../src/lib/config.mjs';
 import { generateQRSVG, generateQRPNG, assertQRRoundTrip } from '../src/lib/qr.mjs';
 import { buildVCard } from '../src/lib/vcard.mjs';
 import { stampHTML, renderTouchIcon, renderOGImage } from '../src/lib/site.mjs';
 import { buildPassJSON, renderPassAssets, PassError } from '../src/lib/pass.mjs';
-import { buildCardSVG, buildCardPDF } from '../src/lib/print.mjs';
 import { nfcReadme } from '../src/lib/docs.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -99,18 +98,6 @@ try {
     '     Everything else built normally. See wallet/README.md.'
   );
 }
-
-// ---- Print ----------------------------------------------------------------
-await mkdir(at('print/'), { recursive: true });
-for (const face of ['front', 'back']) {
-  await writeFile(at(`print/card-${face}.svg`), await buildCardSVG(face, config));
-  // CORRECTION 1: this project's directory contains a space, which `.pathname`
-  // would percent-encode to %20 — createWriteStream would then try to write
-  // into a directory that doesn't exist. fileURLToPath() decodes it back to
-  // a real filesystem path.
-  await buildCardPDF(face, config, fileURLToPath(at(`print/card-${face}.pdf`)));
-}
-console.log('  print/card-{front,back}.{svg,pdf}');
 
 // ---- NFC ------------------------------------------------------------------
 await mkdir(at('nfc/'), { recursive: true });

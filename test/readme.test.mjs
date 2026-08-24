@@ -36,15 +36,3 @@ test('the wallet README lists every signing step and the -legacy caveat', async 
 test('the wallet README states plainly that an unsigned pass will not open', async () => {
   assert.match(await read('wallet/README.md'), /will not open/i);
 });
-
-test('the print README carries the printer specifications', async () => {
-  const md = await read('print/README.md');
-  assert.match(md, /85\.6/);
-  assert.match(md, /3\s?mm/);
-  // CORRECTION: the brief's original regex — /60,\s?50,\s?50,\s?100|60\/50\/50\/100/ —
-  // does not match the prose "CMYK 60 / 50 / 50 / 100" (spaces around the
-  // slashes) that the print README actually carries. Tolerate whitespace
-  // around each separator while still pinning all four channel values.
-  assert.match(md, /60\s*\/\s*50\s*\/\s*50\s*\/\s*100/);
-  assert.match(md, /matte/i);
-});
