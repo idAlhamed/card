@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
+import { chmod, writeFile, unlink } from 'node:fs/promises';
 import { inlineIcon, stampHTML, renderTouchIcon, renderOGImage } from '../src/lib/site.mjs';
 import { validConfig } from './fixtures.mjs';
 
@@ -46,4 +47,45 @@ test('renders a 1200x630 OG image', async () => {
   const meta = await sharp(await renderOGImage(validConfig())).metadata();
   assert.equal(meta.width, 1200);
   assert.equal(meta.height, 630);
+});
+
+test('surfaces a real I/O error from icon lookup instead of a misleading "not found" message', async () => {
+  // A non-ENOENT failure (permissions, corrupt read, etc.) must not be
+  // swallowed and reported as "not found" — that message tells someone to
+  // run fetch:assets, which does nothing for a permissions problem and
+  // doesn't even manage this hand-authored file.
+  const path = new URL('../src/icons/__unreadable-test-icon__.svg', import.meta.url);
+  await writeFile(path, '<svg></svg>');
+  await chmod(path, 0o000);
+  try {
+    await assert.rejects(
+      () => inlineIcon('__unreadable-test-icon__'),
+      (err) => {
+        assert.equal(err.code, 'EACCES');
+        assert.doesNotMatch(err.message, /not found in src\/icons/);
+        return true;
+      }
+    );
+  } finally {
+    await chmod(path, 0o644);
+    await unlink(path);
+  }
+});
+
+test('renderOGImage throws a legible error naming the field when copy overflows the canvas', async () => {
+  // A config edit that makes content.role too long must not surface as
+  // sharp's generic "image to composite must have same dimensions as or be
+  // smaller than the canvas image" — it must name the offending config
+  // field and both the rendered and available widths.
+  const config = validConfig();
+  config.content.role = 'iOS Developer, Swift Engineer, and Product Builder '.repeat(5);
+  await assert.rejects(
+    () => renderOGImage(config),
+    (err) => {
+      assert.match(err.message, /config\.content\.role/);
+      assert.match(err.message, /renders \d+px/);
+      assert.match(err.message, /available/);
+      return true;
+    }
+  );
 });

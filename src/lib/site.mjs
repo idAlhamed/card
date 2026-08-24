@@ -14,7 +14,12 @@ export async function inlineIcon(name) {
     try {
       raw = await readFile(new URL(`${name}.svg`, dir), 'utf8');
       break;
-    } catch { /* try the next directory */ }
+    } catch (err) {
+      // Only "not in this directory" is expected here. Anything else — a
+      // permissions failure, a corrupt read — is a real problem and must
+      // surface with its own message and code, not get relabeled "not found".
+      if (err.code !== 'ENOENT') throw err;
+    }
   }
   if (raw === null) {
     throw new Error(
@@ -58,20 +63,50 @@ export async function renderTouchIcon() {
     .toBuffer();
 }
 
+const OG_CANVAS = { width: 1200, height: 630 };
+
+/**
+ * Confirms a rendered wordmark fits within the canvas at the position it will
+ * be composited at. A config edit that makes a field too long must fail with
+ * a message naming the field and the numbers involved, not sharp's generic
+ * "image to composite must have same dimensions as or be smaller than the
+ * canvas image", which names no file and no cause.
+ */
+async function assertFitsCanvas(fieldPath, svgBuffer, { top, left }) {
+  const { width, height } = await sharp(svgBuffer).metadata();
+  const availableWidth = OG_CANVAS.width - left;
+  const availableHeight = OG_CANVAS.height - top;
+  if (width > availableWidth || height > availableHeight) {
+    throw new Error(
+      `config.content.${fieldPath} is too long for the link-preview image: ` +
+      `renders ${width}px by ${height}px, but only ${availableWidth}px by ${availableHeight}px ` +
+      `is available at top:${top}, left:${left} on a ${OG_CANVAS.width}x${OG_CANVAS.height} canvas. ` +
+      'Shorten it, or reduce the fontSize in renderOGImage.'
+    );
+  }
+}
+
 /** 1200x630 link-preview card: the wordmark and role on black. */
 export async function renderOGImage(config) {
-  const name = await wordmarkSVG(config.content.name, {
+  const name = Buffer.from(await wordmarkSVG(config.content.name, {
     fontSize: 92, letterSpacing: 13, fill: '#F5F5F7',
-  });
-  const role = await wordmarkSVG(config.content.role, {
+  }));
+  const role = Buffer.from(await wordmarkSVG(config.content.role, {
     weight: 'regular', fontSize: 38, fill: '#98989D',
-  });
+  }));
+
+  const namePosition = { top: 262, left: 96 };
+  const rolePosition = { top: 380, left: 100 };
+
+  await assertFitsCanvas('name', name, namePosition);
+  await assertFitsCanvas('role', role, rolePosition);
+
   return sharp({
-    create: { width: 1200, height: 630, channels: 4, background: '#000000' },
+    create: { ...OG_CANVAS, channels: 4, background: '#000000' },
   })
     .composite([
-      { input: Buffer.from(name), top: 262, left: 96 },
-      { input: Buffer.from(role), top: 380, left: 100 },
+      { input: name, ...namePosition },
+      { input: role, ...rolePosition },
     ])
     .png()
     .toBuffer();
