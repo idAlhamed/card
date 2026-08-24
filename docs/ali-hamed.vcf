@@ -1,0 +1,13 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Hamed;Ali;;;
+FN:Ali Hamed
+TITLE:iOS Developer
+NOTE:Building mobile products with a focus on performance & user experience
+ .
+TEL;TYPE=CELL:+966554248646
+EMAIL;TYPE=INTERNET:officialalhamed@gmail.com
+URL:https://idalhamed.github.io/card
+X-SOCIALPROFILE;TYPE=linkedin:https://www.linkedin.com/in/idalhamed/
+X-SOCIALPROFILE;TYPE=github:https://github.com/idAlhamed
+END:VCARD
