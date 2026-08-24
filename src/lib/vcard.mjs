@@ -24,6 +24,18 @@ export function foldLine(line) {
   return parts.join(CRLF + ' ');
 }
 
+/**
+ * RFC 2426 §5.1 TEXT escaping. Backslash must be escaped first to avoid
+ * double-escaping the escapes we insert.
+ */
+function escapeText(text) {
+  return String(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
+
 export function buildVCard(config) {
   const { content, contacts, url } = config;
   const [first, ...rest] = content.fullName.split(' ');
@@ -32,13 +44,16 @@ export function buildVCard(config) {
   const lines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
-    `N:${last};${first};;;`,
-    `FN:${content.fullName}`,
-    `TITLE:${content.role}`,
-    `NOTE:${content.message}`,
+    // N is STRUCTURED: components are escaped individually, then joined with unescaped semicolons
+    `N:${escapeText(last)};${escapeText(first)};;;`,
+    `FN:${escapeText(content.fullName)}`,
+    `TITLE:${escapeText(content.role)}`,
+    `NOTE:${escapeText(content.message)}`,
     `TEL;TYPE=CELL:${contacts.phone}`,
     `EMAIL;TYPE=INTERNET:${contacts.email}`,
+    // URL is URI-type: do NOT escape
     `URL:${url.CARD_URL}`,
+    // X-SOCIALPROFILE are URI-type: do NOT escape
     `X-SOCIALPROFILE;TYPE=linkedin:${contacts.linkedin}`,
     `X-SOCIALPROFILE;TYPE=github:${contacts.github}`,
     'END:VCARD',

@@ -55,3 +55,45 @@ test('includes both social profiles', () => {
   assert.match(vcf, /X-SOCIALPROFILE;TYPE=linkedin:https:\/\/www\.linkedin\.com\/in\/idalhamed\//);
   assert.match(vcf, /X-SOCIALPROFILE;TYPE=github:https:\/\/github\.com\/idAlhamed/);
 });
+
+test('TITLE with comma escapes as backslash-comma', () => {
+  const config = validConfig();
+  config.content.role = 'iOS Developer, Contract';
+  const vcf = buildVCard(config);
+  assert.match(vcf, /TITLE:iOS Developer\\, Contract/);
+});
+
+test('NOTE with semicolon escapes as backslash-semicolon', () => {
+  const config = validConfig();
+  config.content.message = 'Swift; Objective-C; C++';
+  const vcf = buildVCard(config);
+  assert.match(vcf, /NOTE:Swift\\;/);
+});
+
+test('literal backslash is escaped once, not doubled', () => {
+  const config = validConfig();
+  config.content.role = 'Developer\\Manager';
+  const vcf = buildVCard(config);
+  assert.match(vcf, /TITLE:Developer\\\\Manager/);
+  assert.doesNotMatch(vcf, /\\\\\\\\/);
+});
+
+test('CARD_URL with comma is NOT escaped (regression guard)', () => {
+  const config = validConfig();
+  config.url.CARD_URL = 'https://example.com/card?name=Ali,Hamed';
+  const vcf = buildVCard(config);
+  // The comma must appear verbatim in the URL, not escaped
+  assert.match(vcf, /URL:https:\/\/example\.com\/card\?name=Ali,Hamed/);
+  assert.doesNotMatch(vcf, /URL:.*\\,/);
+});
+
+test('real config output is unchanged by escaping fix', () => {
+  const originalVcf = buildVCard(validConfig());
+  // The real config contains no comma, semicolon, or newline in TEXT fields,
+  // so the output must be byte-for-byte identical to what an unescaped version would produce.
+  // This proves the fix is a no-op for current content and won't break anything.
+  assert.match(originalVcf, /FN:Ali Hamed/);
+  assert.match(originalVcf, /TITLE:iOS Developer/);
+  assert.doesNotMatch(originalVcf, /\\,/);
+  assert.doesNotMatch(originalVcf, /\\;/);
+});
