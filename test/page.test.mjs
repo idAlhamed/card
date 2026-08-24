@@ -56,15 +56,31 @@ test('the Add to Wallet anchor is present but commented out', async () => {
     'no live .pkpass link may ship until device verification');
 });
 
+// © ® ™ are Extended_Pictographic but are typographic marks, not emoji.
+// Strip them ONLY when bare; followed by VS16 (U+FE0F) they are genuine emoji.
+const stripTypographicMarks = (s) => s.replace(/[©®™](?!️)/gu, '');
+const isEmojiFree = (s) => !/\p{Extended_Pictographic}/u.test(stripTypographicMarks(s));
+
 test('no emoji anywhere in the page', async () => {
   // \p{Extended_Pictographic} alone false-positives on © and ® (U+00A9, U+00AE):
   // Unicode marks them Extended_Pictographic=Yes but Emoji_Presentation=No, so
   // they render as plain text, not pictographs, unless forced with U+FE0F. The
   // footer's "© 2026 Ali Hamed" (verbatim from config.content.footer) must not
-  // trip a page-wide emoji ban, so match only characters that actually render
-  // as emoji: default emoji presentation, or Extended_Pictographic forced by a
-  // variation selector.
-  assert.doesNotMatch(await src('index.html'), /\p{Emoji_Presentation}|\p{Extended_Pictographic}️/u);
+  // trip a page-wide emoji ban, so bare typographic marks (© ® ™) are stripped
+  // before testing; a mark forced into emoji presentation with VS16 is left in
+  // place and still flagged.
+  assert.ok(isEmojiFree(await src('index.html')));
+});
+
+test('the emoji guard flags a text-presentation emoji', () => {
+  // ❤ (U+2764 HEAVY BLACK HEART) defaults to text presentation, so a naive
+  // \p{Emoji_Presentation} check would miss it. Extended_Pictographic still
+  // catches it once bare ©/®/™ are stripped.
+  assert.equal(isEmojiFree('love ❤'), false, 'a bare text-presentation emoji must be flagged');
+});
+
+test('the emoji guard allows the real footer line', () => {
+  assert.equal(isEmojiFree('© 2026 Ali Hamed'), true, 'the copyright sign must not be flagged as emoji');
 });
 
 test('the banned grey is not used', async () => {
