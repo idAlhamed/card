@@ -25,10 +25,17 @@ test('page copy matches config.json exactly', async () => {
 test('every contact href is present', async () => {
   const config = await loadConfig();
   const html = await src('index.html');
-  for (const key of ['linkedin', 'github', 'whatsapp']) {
+  for (const key of ['linkedin', 'github', 'discord', 'whatsapp']) {
     assert.ok(html.includes(`href="${config.contacts[key]}"`), `missing ${key} href`);
   }
   assert.ok(html.includes(`href="mailto:${config.contacts.email}"`), 'missing mailto href');
+});
+
+test('the Discord row records the username from config', async () => {
+  const config = await loadConfig();
+  const html = await src('index.html');
+  assert.ok(html.includes(`aria-label="Discord — ${config.contacts.discordUsername}"`),
+    'the Discord anchor must carry the username from config.contacts.discordUsername');
 });
 
 test('CARD_URL never appears literally in authored source', async () => {

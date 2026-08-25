@@ -79,10 +79,12 @@ export function buildPassJSON(config) {
       primaryFields: [
         { key: 'name', label: '', value: content.name },
       ],
+      // Wallet lays out the fields WITHIN one array horizontally (up to four),
+      // but secondaryFields and auxiliaryFields are two SEPARATE rows — one
+      // field in each stacks them vertically on device. Both live in
+      // secondaryFields so Wallet renders them side by side.
       secondaryFields: [
         { key: 'role', label: 'ROLE', value: content.role },
-      ],
-      auxiliaryFields: [
         { key: 'stack', label: 'TECHNOLOGIES', value: content.technologies },
       ],
       backFields: [
@@ -119,7 +121,8 @@ export function buildPassJSON(config) {
       format: 'PKBarcodeFormatQR',
       message: url.CARD_URL,
       messageEncoding: 'iso-8859-1',
-      altText: short,
+      // No altText: Wallet renders it as visible text beneath the barcode.
+      // Omitting it hides the URL and does not affect scannability.
     }],
   };
 }

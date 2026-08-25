@@ -63,8 +63,8 @@ test('the role is a secondary field, labelled ROLE', () => {
 test('technologies appear as an auxiliary field with preserved casing', () => {
   const c = validConfig();
   const p = buildPassJSON(c);
-  assert.equal(p.generic.auxiliaryFields[0].value, c.content.technologies);
-  assert.equal(p.generic.auxiliaryFields[0].label, 'TECHNOLOGIES');
+  assert.equal(p.generic.secondaryFields[1].value, c.content.technologies);
+  assert.equal(p.generic.secondaryFields[1].label, 'TECHNOLOGIES');
 });
 
 test('all four contacts are tappable on the back', () => {

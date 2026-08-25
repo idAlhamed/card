@@ -17,10 +17,39 @@ const script = fileURLToPath(new URL('scripts/build.mjs', root));
 
 const hash = async (url) => createHash('sha256').update(await readFile(url)).digest('hex');
 
-test('the build completes and reports the Team ID as outstanding', async () => {
+// Both the "outstanding" notice and --strict's failure depend on
+// apple.teamIdentifier being UNSET. That was the repo's state early on, so
+// these tests originally just ran the real build. Once a real Pass Type ID
+// exists, config.json legitimately carries a Team ID and those assumptions
+// break. They now supply their own config instead, and restore the real
+// artifacts afterwards so the working tree stays clean.
+async function withUnsetTeamId(fn) {
+  const dir = await mkdtemp(join(tmpdir(), 'ali-card-noteam-'));
+  const configPath = join(dir, 'config.json');
+  const raw = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
+  raw.apple.teamIdentifier = '';
+  await writeFile(configPath, JSON.stringify(raw, null, 2));
+  try {
+    await fn(configPath);
+  } finally {
+    await run('node', [script]);          // rebuild from the real config
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test('the build reports the Team ID as outstanding when it is unset', async () => {
+  await withUnsetTeamId(async (configPath) => {
+    const { stdout } = await run('node', [script, '--config', configPath]);
+    assert.match(stdout, /Team ID/i, 'must tell Ali what is still missing');
+    assert.match(stdout, /Build complete/);
+  });
+});
+
+test('the build writes pass.json once a Team ID is present', async () => {
   const { stdout } = await run('node', [script]);
-  assert.match(stdout, /Team ID/i, 'must tell Ali what is still missing');
   assert.match(stdout, /Build complete/);
+  assert.doesNotMatch(stdout, /Outstanding/, 'nothing should be outstanding now');
+  await access(new URL('wallet/AliHamed.pass/pass.json', root));
 });
 
 test('leaves the live docs/ untouched when a build step fails after it would previously have been wiped', async () => {
@@ -82,12 +111,23 @@ test('the built page carries the real URL and no surviving tokens', async () => 
 // (the authored template, which correctly still contains {{ICON:...}}
 // tokens) twice; this test names the built file explicitly so that
 // confusion can't recur silently.
-test('the built page renders four inline icons and no unresolved tokens', async () => {
+test('the built page renders one inline icon per contact row and no unresolved tokens', async () => {
   const html = await readFile(new URL('docs/index.html', root), 'utf8');
   const config = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
 
+  // Derived from config rather than hardcoded, so adding a contact row does
+  // not require hand-editing this number (and cannot silently go unchecked).
+  const contactHrefs = [
+    config.contacts.linkedin,
+    config.contacts.github,
+    config.contacts.discord,
+    config.contacts.whatsapp,
+    `mailto:${config.contacts.email}`,
+  ].filter(Boolean);
+
   const iconMatches = html.match(/<svg class="icon"/g) ?? [];
-  assert.equal(iconMatches.length, 4, 'expected exactly 4 inline icon svgs in the built page');
+  assert.equal(iconMatches.length, contactHrefs.length,
+    `expected one inline icon svg per contact row (${contactHrefs.length})`);
 
   const tokenMatches = html.match(/\{\{/g) ?? [];
   assert.equal(tokenMatches.length, 0, 'no unresolved {{...}} template tokens in the built page');
@@ -95,12 +135,7 @@ test('the built page renders four inline icons and no unresolved tokens', async 
   assert.doesNotMatch(html, /&lt;svg/, 'icon markup must be inlined, not HTML-escaped');
   assert.doesNotMatch(html, /&lt;path/, 'icon markup must be inlined, not HTML-escaped');
 
-  for (const href of [
-    config.contacts.linkedin,
-    config.contacts.github,
-    config.contacts.whatsapp,
-    `mailto:${config.contacts.email}`,
-  ]) {
+  for (const href of contactHrefs) {
     const needle = `href="${href}"`;
     const occurrences = html.split(needle).length - 1;
     assert.equal(occurrences, 1, `expected exactly one ${needle} in the built page`);
@@ -119,9 +154,13 @@ test('writes the NFC guide with the live URL', async () => {
 });
 
 test('--strict fails while the Team ID is unset', async () => {
-  await assert.rejects(() => run('node', [script, '--strict']), (err) => {
-    assert.equal(err.code, 1, 'the notice-to-failure path exits exactly 1');
-    return true;
+  await withUnsetTeamId(async (configPath) => {
+    await assert.rejects(
+      () => run('node', [script, '--strict', '--config', configPath]),
+      (err) => {
+        assert.equal(err.code, 1, 'the notice-to-failure path exits exactly 1');
+        return true;
+      });
   });
 });
 
