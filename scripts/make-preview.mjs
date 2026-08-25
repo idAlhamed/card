@@ -65,7 +65,7 @@ async function main() {
   const pass = buildPassJSON(previewConfig);
   const primary = pass.generic.primaryFields[0];   // name
   const secondary = pass.generic.secondaryFields[0]; // role
-  const auxiliary = pass.generic.auxiliaryFields[0];  // technologies
+  const auxiliary = pass.generic.secondaryFields[1];  // technologies
 
   const logoBuffer = await loadLogo();
   const logoMeta = await sharp(logoBuffer).metadata();

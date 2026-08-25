@@ -21,9 +21,7 @@
         "key": "role",
         "label": "ROLE",
         "value": "iOS Developer"
-      }
-    ],
-    "auxiliaryFields": [
+      },
       {
         "key": "stack",
         "label": "TECHNOLOGIES",
@@ -77,8 +75,7 @@
     {
       "format": "PKBarcodeFormatQR",
       "message": "https://idalhamed.github.io/card",
-      "messageEncoding": "iso-8859-1",
-      "altText": "idalhamed.github.io/card"
+      "messageEncoding": "iso-8859-1"
     }
   ]
 }
