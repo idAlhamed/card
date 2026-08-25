@@ -11,7 +11,7 @@ const root = new URL('../', import.meta.url);
 const INTER_TAG = 'v4.1';
 const INTER_ZIP = `https://github.com/rsms/inter/releases/download/${INTER_TAG}/Inter-4.1.zip`;
 const ICONS_TAG = '13.0.0';
-const ICONS = ['linkedin', 'github', 'whatsapp'];
+const ICONS = ['linkedin', 'github', 'discord', 'whatsapp'];
 
 async function fetchInter() {
   const fontDir = new URL('vendor/fonts/', root);

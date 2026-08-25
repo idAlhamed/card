@@ -111,12 +111,23 @@ test('the built page carries the real URL and no surviving tokens', async () => 
 // (the authored template, which correctly still contains {{ICON:...}}
 // tokens) twice; this test names the built file explicitly so that
 // confusion can't recur silently.
-test('the built page renders four inline icons and no unresolved tokens', async () => {
+test('the built page renders one inline icon per contact row and no unresolved tokens', async () => {
   const html = await readFile(new URL('docs/index.html', root), 'utf8');
   const config = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
 
+  // Derived from config rather than hardcoded, so adding a contact row does
+  // not require hand-editing this number (and cannot silently go unchecked).
+  const contactHrefs = [
+    config.contacts.linkedin,
+    config.contacts.github,
+    config.contacts.discord,
+    config.contacts.whatsapp,
+    `mailto:${config.contacts.email}`,
+  ].filter(Boolean);
+
   const iconMatches = html.match(/<svg class="icon"/g) ?? [];
-  assert.equal(iconMatches.length, 4, 'expected exactly 4 inline icon svgs in the built page');
+  assert.equal(iconMatches.length, contactHrefs.length,
+    `expected one inline icon svg per contact row (${contactHrefs.length})`);
 
   const tokenMatches = html.match(/\{\{/g) ?? [];
   assert.equal(tokenMatches.length, 0, 'no unresolved {{...}} template tokens in the built page');
@@ -124,12 +135,7 @@ test('the built page renders four inline icons and no unresolved tokens', async 
   assert.doesNotMatch(html, /&lt;svg/, 'icon markup must be inlined, not HTML-escaped');
   assert.doesNotMatch(html, /&lt;path/, 'icon markup must be inlined, not HTML-escaped');
 
-  for (const href of [
-    config.contacts.linkedin,
-    config.contacts.github,
-    config.contacts.whatsapp,
-    `mailto:${config.contacts.email}`,
-  ]) {
+  for (const href of contactHrefs) {
     const needle = `href="${href}"`;
     const occurrences = html.split(needle).length - 1;
     assert.equal(occurrences, 1, `expected exactly one ${needle} in the built page`);
