@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Internal build/process reports — not part of the deliverable
 .superpowers/
+
+# Extracted reference crops — local working material, not a deliverable
+preview/_refs/
