@@ -63,3 +63,98 @@ test('renders to a real raster image via sharp', async () => {
   assert.equal(meta.width, 256);
   assert.ok(meta.height > 0);
 });
+
+// --- Structural regression tests (redesign-foundations round 1 feedback:
+// the A must not read as a house) ---------------------------------------
+
+function parsePaths(svg) {
+  return [...svg.matchAll(/<path d="([^"]+)"/g)].map((m) => {
+    const points = m[1].match(/[ML]-?[\d.]+,-?[\d.]+/g)
+      .map((tok) => tok.slice(1).split(',').map(Number));
+    return points;
+  });
+}
+
+function parseCircles(svg) {
+  return [...svg.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"/g)]
+    .map((m) => ({ x: Number(m[1]), y: Number(m[2]), r: Number(m[3]) }));
+}
+
+test('exactly six strokes: two A legs + A crossbar, two H verticals + H crossbar', () => {
+  const paths = parsePaths(monogramSVG());
+  assert.equal(paths.length, 6);
+});
+
+test('the A has a crossbar connecting its two legs (not open, not a closed floor)', () => {
+  const paths = parsePaths(monogramSVG());
+  // The two A legs share their first point (the apex).
+  const apex = paths[0][0];
+  const legs = paths.filter((p) => p[0][0] === apex[0] && p[0][1] === apex[1]);
+  assert.equal(legs.length, 2, 'both A legs must start at a shared apex point');
+
+  // A crossbar is a two-point horizontal path (constant y) whose endpoints
+  // sit strictly between the apex height and the legs' lowest point — i.e.
+  // it is not a floor joining the two leg bottoms.
+  const legBottoms = legs.map((p) => p[p.length - 1]);
+  const crossbar = paths.find((p) => p.length === 2 && p[0][1] === p[1][1]
+    && p[0][1] !== apex[1] && !legBottoms.some((b) => b[1] === p[0][1]));
+  assert.ok(crossbar, 'expected a horizontal crossbar path distinct from the leg bottoms');
+});
+
+test('the A legs are diagonal (splay outward), not vertical walls', () => {
+  const paths = parsePaths(monogramSVG());
+  const apex = paths[0][0];
+  const legs = paths.filter((p) => p[0][0] === apex[0] && p[0][1] === apex[1]);
+  for (const leg of legs) {
+    const [, knee] = leg; // first segment: apex -> knee
+    assert.notEqual(knee[0], apex[0], 'the apex-to-knee segment must move horizontally (diagonal), not stay vertical');
+  }
+});
+
+test('the A is open at the base — no path joins the two leg bottoms into a floor', () => {
+  const paths = parsePaths(monogramSVG());
+  const apex = paths[0][0];
+  const legs = paths.filter((p) => p[0][0] === apex[0] && p[0][1] === apex[1]);
+  const bottoms = legs.map((p) => p[p.length - 1]);
+  assert.equal(bottoms.length, 2);
+  const [left, right] = bottoms;
+  const floor = paths.find((p) => p.length === 2
+    && p.some((pt) => pt[0] === left[0] && pt[1] === left[1])
+    && p.some((pt) => pt[0] === right[0] && pt[1] === right[1]));
+  assert.equal(floor, undefined, 'a path directly connecting both leg-bottom terminals would close the A into a house');
+});
+
+test('default stroke width is about 1/40 of the mark height (delicate tracery, not a pictogram)', () => {
+  const svg = monogramSVG();
+  const [, , vbH] = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+  const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
+  assert.ok(Math.abs(strokeWidth / Number(vbH) - 1 / 40) < 0.005,
+    `expected strokeWidth/height ~ 1/40, got ${strokeWidth}/${vbH}`);
+});
+
+test('node diameter is roughly 3x the stroke width, not 8x', () => {
+  const svg = monogramSVG();
+  const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
+  const circles = parseCircles(svg);
+  assert.ok(circles.length > 0);
+  for (const c of circles) {
+    const diameterRatio = (c.r * 2) / strokeWidth;
+    assert.ok(diameterRatio >= 2 && diameterRatio <= 4,
+      `node diameter should be ~3x stroke width, got ${diameterRatio}x`);
+  }
+});
+
+test('renders legibly at 40px, 80px and 400px (smoke check: real pixels present)', async () => {
+  for (const size of [40, 80, 400]) {
+    const svg = monogramSVG({ size, color: '#00B7FF', background: '#0A0A0C' });
+    const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().raw()
+      .toBuffer({ resolveWithObject: true });
+    let litPixels = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      // Any pixel noticeably brighter than the near-black background counts as "lit".
+      if (data[i + 2] > 60) litPixels++; // blue channel, since the accent is blue
+    }
+    assert.ok(litPixels > 0, `expected lit pixels at size ${size}`);
+    assert.equal(info.width, size);
+  }
+});
