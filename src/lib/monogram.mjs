@@ -39,10 +39,12 @@ const RING_WEIGHT = 0.55;
 // boldest stroke and alone reads as "A" even at small sizes, overshooting
 // through the crossbar row down to its own terminal. The mid contour is
 // SECONDARY detail tracery, thinner and shorter. The innermost contour is
-// the shortest, closes into the classic A triangle (its own crossbar
-// forming the closing edge — the counter), and is SECONDARY too — but its
-// crossbar edge is reinforced by a PRIMARY-weight overlay (below) so the
-// horizontal bar that makes the shape read as "A" stays bold.
+// the shortest of the three and, like the outer and mid contours, stays
+// OPEN — it follows the same apex-and-splay path and simply terminates
+// (short, well above the crossbar row), so the interior never closes into a
+// filled triangle outline. The bold horizontal bar that makes the shape
+// read as "A" is a separate, freestanding PRIMARY-weight crossbar trace
+// (below) spanning the same row — not the innermost contour's closing edge.
 
 const A_CX = 54; // shared vertical axis both legs splay from/to
 const A_TAN_THETA = 0.30; // leg slope: dx per dy — shallow enough that a
@@ -58,9 +60,12 @@ const A_INSET_INNER = 9;
 const A_APEX_Y_MID = A_APEX_Y_OUTER + A_INSET_MID / A_SIN_THETA;
 const A_APEX_Y_INNER = A_APEX_Y_OUTER + A_INSET_INNER / A_SIN_THETA;
 
-const A_CROSSBAR_Y = 108; // where the inner contour closes
+const A_CROSSBAR_Y = 108; // row the freestanding crossbar trace spans
 const A_TERM_Y_OUTER = 172; // outer contour's overshoot terminal (lowest)
 const A_TERM_Y_MID = 150; // mid contour's overshoot terminal (staggered)
+// Innermost contour terminates well above the crossbar row — short and
+// open, never reaching down far enough to imply a floor.
+const A_TERM_Y_INNER = 74;
 const A_MIDRING_T = 0.45; // fraction from apex to terminal, outer contour only
 
 function aLegX(y, apexY, side) {
@@ -72,6 +77,9 @@ function aPoint(y, apexY, side) {
   return { x: aLegX(y, apexY, side), y };
 }
 
+// Endpoints of the freestanding crossbar trace: where the innermost
+// contour's splay LINE would cross the crossbar row, even though the
+// contour itself terminates well above this row and never reaches it.
 function aInnerCrossbarPoints() {
   return [
     aPoint(A_CROSSBAR_Y, A_APEX_Y_INNER, -1),
@@ -93,12 +101,15 @@ function aInnerCrossbarPoints() {
 // trace above it with an off-centre ring, plus a couple of short stubs
 // that branch off and stop mid-air.
 
-const H_FLANK_L_X = 108;
-const H_OUTER_L_X = 124;
-const H_INNER_L_X = 138;
-const H_INNER_R_X = 179;
-const H_OUTER_R_X = 193;
-const H_FLANK_R_X = 209;
+// Narrowed and pulled closer to the A (round 4 refinement) so the pair
+// reads as one lockup rather than two separate marks sitting apart. Heights
+// (below) are untouched — only the horizontal spread changed.
+const H_FLANK_L_X = 106;
+const H_OUTER_L_X = 118;
+const H_INNER_L_X = 129;
+const H_INNER_R_X = 161;
+const H_OUTER_R_X = 172;
+const H_FLANK_R_X = 184;
 
 const H_OUTER_TOP_Y = 6;
 const H_OUTER_BOTTOM_Y = 174;
@@ -113,12 +124,12 @@ const H_FLANK_BOTTOM_Y = 118;
 
 const H_CROSS_Y = 108; // shared baseline with the A's crossbar
 const H_CROSS_ACCENT_Y = 100;
-const H_CROSS_ACCENT_X0 = 165;
-const H_CROSS_ACCENT_X1 = 172;
-const H_CROSS_RING_X = 172; // "right of centre" ring on the accent trace
-const H_STUB_DOWN_X = 146;
+const H_CROSS_ACCENT_X0 = 150;
+const H_CROSS_ACCENT_X1 = 156;
+const H_CROSS_RING_X = 156; // "right of centre" ring on the accent trace
+const H_STUB_DOWN_X = 135;
 const H_STUB_DOWN_Y = 119;
-const H_STUB_UP_X = 151;
+const H_STUB_UP_X = 139;
 const H_STUB_UP_Y = 98;
 
 const H_CROSS_CENTER_X = (H_INNER_L_X + H_INNER_R_X) / 2;
@@ -148,17 +159,16 @@ function aContours() {
     aPoint(A_APEX_Y_MID, A_APEX_Y_MID, -1),
     aPoint(A_TERM_Y_MID, A_APEX_Y_MID, +1),
   ]);
-  // Innermost contour: closes into the classic A triangle. The Z closing
-  // segment IS the crossbar — the counter's floor — which is correct here
-  // (this is what makes it read as "A"); the outer/mid contours below are
-  // never closed into a floor of their own, so the mark as a whole still
-  // doesn't read as a house.
-  const [crossLeft, crossRight] = aInnerCrossbarPoints();
+  // Innermost contour: short and OPEN, same construction as the outer/mid
+  // contours (apex, splay left, splay right) but terminating well above the
+  // crossbar row instead of closing into a floor — so the interior reads as
+  // tracery, not a filled triangle outline. The freestanding crossbar trace
+  // (see primaryStrokePaths) is what carries the "A" reading instead.
   const innerPath = pathD([
-    crossLeft,
+    aPoint(A_TERM_Y_INNER, A_APEX_Y_INNER, -1),
     { x: A_CX, y: A_APEX_Y_INNER }, // apex
-    crossRight,
-  ], { close: true });
+    aPoint(A_TERM_Y_INNER, A_APEX_Y_INNER, +1),
+  ]);
   return { outerPath, midPath, innerPath };
 }
 
@@ -268,8 +278,8 @@ function hRings(rLarge, rMed, rSmall, rMicro) {
 function primaryStrokePaths() {
   const { outerPath } = aContours();
   const [crossLeft, crossRight] = aInnerCrossbarPoints();
-  // Reinforces the A's crossbar at full weight without disturbing the
-  // (secondary-weight) closed inner contour it's part of.
+  // The bold horizontal bar that reads as "A" — a freestanding PRIMARY
+  // trace, independent of the (open, secondary-weight) innermost contour.
   const crossbarEmphasis = pathD([crossLeft, crossRight]);
   const { mainCross } = hCrossbars();
   return [outerPath, crossbarEmphasis, ...hStemVerticalPaths(), mainCross];
@@ -305,8 +315,10 @@ function ringNodes(rLarge, rMed, rSmall, rMicro) {
  *                                      letters. Secondary/ornamental strokes
  *                                      and ring nodes are drawn thinner,
  *                                      proportional to this value. Defaults
- *                                      to VIEW_H/70 — fine tracery, not a
- *                                      bold pictogram stroke.
+ *                                      to VIEW_H/80 — a step finer than the
+ *                                      previous round's VIEW_H/70, for a
+ *                                      more delicate trace while staying
+ *                                      legible at the 40px Wallet-strip size.
  * @param {string|null} [opts.background=null] Optional solid backing rect
  *                                      colour; omitted (transparent) by default.
  * @returns {string} A complete `<svg>…</svg>` document.
@@ -315,7 +327,7 @@ export function monogramSVG(opts = {}) {
   const {
     size = 200,
     color = '#00B7FF',
-    strokeWidth = VIEW_H / 70,
+    strokeWidth = VIEW_H / 80,
     background = null,
   } = opts;
 

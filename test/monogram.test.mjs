@@ -124,23 +124,33 @@ test('the A is built from three nested contours sharing one apex axis, staggered
     'apex height must strictly increase from outer to inner contour');
 });
 
-test('the innermost A contour closes into a triangle — its crossbar is the closing edge', () => {
-  const paths = parsePaths(monogramSVG());
+test('no A contour closes — the innermost contour follows the apex-and-splay path and terminates, same as the other two', () => {
+  const svg = monogramSVG();
+  const paths = parsePaths(svg);
   const closed = paths.filter((p) => p.closed);
-  assert.equal(closed.length, 1, 'expected exactly one closed A contour (the classic A counter)');
-  const [triangle] = closed;
-  assert.equal(triangle.points.length, 3);
-  const [left, apex, right] = triangle.points;
-  assert.equal(left[1], right[1], 'the closing edge (crossbar) must be horizontal');
-  assert.notEqual(left[1], apex[1], 'the crossbar sits below the apex, not through it');
+  assert.equal(closed.length, 0,
+    'expected zero closed contours anywhere — the A must read as open tracery, not a filled triangle outline');
 });
 
-test('the outer and mid A contours stay open — no path joins their leg-bottoms into a floor', () => {
+test('the A reads as "A" via a freestanding crossbar trace, independent of the (open) innermost contour', () => {
+  const svg = monogramSVG();
+  const vw = viewWidth(svg);
+  const paths = parsePaths(svg);
+  // A bold, standalone 2-point horizontal path inside the A's coordinate
+  // range — not part of any of the three apex-splay contours (those are
+  // all 3-point paths).
+  const crossbar = paths.find((p) => p.points.length === 2
+    && p.points.every(([x]) => x < vw * 0.55)
+    && p.points[0][1] === p.points[1][1]);
+  assert.ok(crossbar, 'expected a standalone horizontal crossbar trace inside the A');
+});
+
+test('the outer, mid, and inner A contours all stay open — no path joins any leg-bottoms into a floor', () => {
   const svg = monogramSVG();
   const vw = viewWidth(svg);
   const paths = parsePaths(svg);
   const aPaths = paths.filter((p) => p.points.every(([x]) => x < vw * 0.55) && p.points.length === 3 && !p.closed);
-  assert.equal(aPaths.length, 2, 'expected two open A contours (outer + mid)');
+  assert.equal(aPaths.length, 3, 'expected all three A contours (outer, mid, inner) to be open');
   for (const contour of aPaths) {
     const bottoms = [contour.points[0], contour.points[2]];
     // A "floor" would be a separate 2-point path directly connecting the
@@ -151,6 +161,20 @@ test('the outer and mid A contours stay open — no path joins their leg-bottoms
     assert.equal(floor, undefined,
       'a path directly joining both leg-bottom terminals would close the contour into a house');
   }
+});
+
+test('the innermost A contour terminates well above the crossbar row, shorter than the outer and mid contours', () => {
+  const svg = monogramSVG();
+  const vw = viewWidth(svg);
+  const paths = parsePaths(svg);
+  const aPaths = paths.filter((p) => p.points.every(([x]) => x < vw * 0.55) && p.points.length === 3 && !p.closed);
+  assert.equal(aPaths.length, 3);
+  const spans = aPaths
+    .map((p) => Math.max(p.points[0][1], p.points[2][1]) - p.points[1][1]) // bottom y - apex y
+    .sort((a, b) => a - b);
+  const [innerSpan, midSpan, outerSpan] = spans;
+  assert.ok(innerSpan < midSpan && midSpan < outerSpan,
+    'the innermost contour must be the shortest, mid next, outer the longest overshoot');
 });
 
 test('the A legs are diagonal (splay outward), not vertical walls', () => {
@@ -241,12 +265,12 @@ test('ring node radii are restrained to a small, varied set of sizes (terminals 
   }
 });
 
-test('default primary stroke width is fine tracery — about 1/70 of the mark height', () => {
+test('default primary stroke width is fine tracery — about 1/80 of the mark height', () => {
   const svg = monogramSVG();
   const [, , vbH] = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
   const primaryWidth = tierStrokeWidth(svg, 'primary strokes');
-  assert.ok(Math.abs(primaryWidth / Number(vbH) - 1 / 70) < 0.005,
-    `expected primary strokeWidth/height ~ 1/70, got ${primaryWidth}/${vbH}`);
+  assert.ok(Math.abs(primaryWidth / Number(vbH) - 1 / 80) < 0.005,
+    `expected primary strokeWidth/height ~ 1/80, got ${primaryWidth}/${vbH}`);
 });
 
 test('secondary/ornamental strokes and ring nodes are visibly lighter than the primary letterform strokes', () => {
