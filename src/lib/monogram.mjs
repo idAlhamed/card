@@ -7,6 +7,14 @@
 // filled dots. No text elements are rendered anywhere in this file; every
 // contour is a hand-authored path in a fixed local coordinate system.
 //
+// Every stroke belongs to one of two weight tiers: PRIMARY (the strokes
+// that actually form the letters — the A's outer contour, the H's two
+// doubled stems and its full-width crossbar) and SECONDARY (the nested
+// detail contours, flanking ornament traces, and floating stubs). This
+// hierarchy is what keeps the mark legible at small sizes: at 40-80px the
+// thin secondary tracery recedes into the background while the bold
+// primary strokes still read unmistakably as "A" and "H".
+//
 // Geometry lives in a fixed VIEW_W x VIEW_H local coordinate system;
 // `size` scales the whole mark uniformly via the SVG viewBox, so stroke
 // widths and node radii stay proportionate at any rendered size.
@@ -16,17 +24,25 @@
 const VIEW_W = 220;
 const VIEW_H = 190;
 
+// Weight tiers, expressed as a fraction of the primary stroke width (the
+// `strokeWidth` option). Kept low so secondary/ornamental detail visibly
+// recedes rather than competing with the letterforms.
+const SECONDARY_WEIGHT = 0.5;
+const RING_WEIGHT = 0.55;
+
 // ============================================================= "A" ===
 //
 // Three nested, parallel contours sharing one splay angle (the classic
 // A-leg slope), offset perpendicular to that slope so each inner contour's
 // apex sits progressively lower and further inset — exactly what a true
-// parallel offset of a V produces. The outer two contours are the ones
-// that overshoot: they run straight through the crossbar row and continue
-// down to their own independent terminals, staggered in length. The third
-// (innermost) contour is the shortest and is what actually reads as the
-// letter "A": it closes into a triangle, its own crossbar forming the
-// closing edge — the classic counter — with a ring node at its centre.
+// parallel offset of a V produces. The outer contour is PRIMARY: it is the
+// boldest stroke and alone reads as "A" even at small sizes, overshooting
+// through the crossbar row down to its own terminal. The mid contour is
+// SECONDARY detail tracery, thinner and shorter. The innermost contour is
+// the shortest, closes into the classic A triangle (its own crossbar
+// forming the closing edge — the counter), and is SECONDARY too — but its
+// crossbar edge is reinforced by a PRIMARY-weight overlay (below) so the
+// horizontal bar that makes the shape read as "A" stays bold.
 
 const A_CX = 54; // shared vertical axis both legs splay from/to
 const A_TAN_THETA = 0.30; // leg slope: dx per dy — shallow enough that a
@@ -56,28 +72,44 @@ function aPoint(y, apexY, side) {
   return { x: aLegX(y, apexY, side), y };
 }
 
+function aInnerCrossbarPoints() {
+  return [
+    aPoint(A_CROSSBAR_Y, A_APEX_Y_INNER, -1),
+    aPoint(A_CROSSBAR_Y, A_APEX_Y_INNER, +1),
+  ];
+}
+
 // --- "H" -------------------------------------------------------------
 //
-// Each stem is two parallel verticals (outer + inner) that overshoot the
-// crossbar at staggered heights, plus a thin single flanking trace outside
-// each stem, shorter still. The crossbar is doubled too: a main trace at
-// the stems' inner pair with a centre ring, and a short accent trace above
-// it carrying a second ring off-centre — plus a couple of short stubs that
-// branch off the crossbar and stop mid-air.
+// Each stem is a doubled pair of parallel verticals (outer + inner) —
+// together they ARE the letter, so both are PRIMARY weight and both run
+// tall with only mild overshoot stagger, reading as one unified stroke at
+// a glance. A single PRIMARY crossbar spans the full width between the two
+// stem pairs (outer-left to outer-right), physically meeting all four
+// verticals, so the shape is unambiguously one connected "H" rather than a
+// row of independent bars. A thin single flanking trace sits outside each
+// stem — clearly secondary: thinner, much shorter, obviously ornament, not
+// part of the letterform. The crossbar carries a short SECONDARY accent
+// trace above it with an off-centre ring, plus a couple of short stubs
+// that branch off and stop mid-air.
 
-const H_FLANK_L_X = 112;
+const H_FLANK_L_X = 108;
 const H_OUTER_L_X = 124;
 const H_INNER_L_X = 138;
 const H_INNER_R_X = 179;
 const H_OUTER_R_X = 193;
-const H_FLANK_R_X = 205;
+const H_FLANK_R_X = 209;
 
 const H_OUTER_TOP_Y = 6;
 const H_OUTER_BOTTOM_Y = 174;
-const H_INNER_TOP_Y = 28;
-const H_INNER_BOTTOM_Y = 150;
-const H_FLANK_TOP_Y = 46;
-const H_FLANK_BOTTOM_Y = 132;
+// Inner stem kept close in length to the outer one — a mild stagger, not a
+// dramatically shorter trace — so the doubled pair reads as one stem.
+const H_INNER_TOP_Y = 18;
+const H_INNER_BOTTOM_Y = 162;
+// Flank is dramatically shorter than either stem trace — unmistakably
+// ornament, never mistaken for part of the letter.
+const H_FLANK_TOP_Y = 60;
+const H_FLANK_BOTTOM_Y = 118;
 
 const H_CROSS_Y = 108; // shared baseline with the A's crossbar
 const H_CROSS_ACCENT_Y = 100;
@@ -106,12 +138,12 @@ function pathD(points, { close = false } = {}) {
 }
 
 function aContours() {
-  const outer = pathD([
+  const outerPath = pathD([
     aPoint(A_TERM_Y_OUTER, A_APEX_Y_OUTER, -1),
     aPoint(A_APEX_Y_OUTER, A_APEX_Y_OUTER, -1), // = apex
     aPoint(A_TERM_Y_OUTER, A_APEX_Y_OUTER, +1),
   ]);
-  const mid = pathD([
+  const midPath = pathD([
     aPoint(A_TERM_Y_MID, A_APEX_Y_MID, -1),
     aPoint(A_APEX_Y_MID, A_APEX_Y_MID, -1),
     aPoint(A_TERM_Y_MID, A_APEX_Y_MID, +1),
@@ -121,12 +153,13 @@ function aContours() {
   // (this is what makes it read as "A"); the outer/mid contours below are
   // never closed into a floor of their own, so the mark as a whole still
   // doesn't read as a house.
-  const inner = pathD([
-    aPoint(A_CROSSBAR_Y, A_APEX_Y_INNER, -1),
-    aPoint(A_APEX_Y_INNER, A_APEX_Y_INNER, -1),
-    aPoint(A_CROSSBAR_Y, A_APEX_Y_INNER, +1),
+  const [crossLeft, crossRight] = aInnerCrossbarPoints();
+  const innerPath = pathD([
+    crossLeft,
+    { x: A_CX, y: A_APEX_Y_INNER }, // apex
+    crossRight,
   ], { close: true });
-  return [outer, mid, inner];
+  return { outerPath, midPath, innerPath };
 }
 
 function aStubs() {
@@ -139,22 +172,36 @@ function aStubs() {
   return { above, below, aboveY, belowY };
 }
 
-function hStrokes() {
-  const verticals = [
-    [H_FLANK_L_X, H_FLANK_TOP_Y, H_FLANK_BOTTOM_Y],
+function hStemVerticalPaths() {
+  return [
     [H_OUTER_L_X, H_OUTER_TOP_Y, H_OUTER_BOTTOM_Y],
     [H_INNER_L_X, H_INNER_TOP_Y, H_INNER_BOTTOM_Y],
     [H_INNER_R_X, H_INNER_TOP_Y, H_INNER_BOTTOM_Y],
     [H_OUTER_R_X, H_OUTER_TOP_Y, H_OUTER_BOTTOM_Y],
+  ].map(([x, y0, y1]) => pathD([{ x, y: y0 }, { x, y: y1 }]));
+}
+
+function hFlankVerticalPaths() {
+  return [
+    [H_FLANK_L_X, H_FLANK_TOP_Y, H_FLANK_BOTTOM_Y],
     [H_FLANK_R_X, H_FLANK_TOP_Y, H_FLANK_BOTTOM_Y],
   ].map(([x, y0, y1]) => pathD([{ x, y: y0 }, { x, y: y1 }]));
+}
 
-  const mainCross = pathD([{ x: H_INNER_L_X, y: H_CROSS_Y }, { x: H_INNER_R_X, y: H_CROSS_Y }]);
+function hCrossbars() {
+  // The main crossbar spans the FULL width between the two outer (stem)
+  // verticals — a structural member that physically meets all four main
+  // stem traces, not a stub that only touches the inner pair. This is what
+  // makes the shape read unambiguously as "H" rather than a row of bars.
+  const mainCross = pathD([{ x: H_OUTER_L_X, y: H_CROSS_Y }, { x: H_OUTER_R_X, y: H_CROSS_Y }]);
   const accentCross = pathD([{ x: H_CROSS_ACCENT_X0, y: H_CROSS_ACCENT_Y }, { x: H_CROSS_ACCENT_X1, y: H_CROSS_ACCENT_Y }]);
+  return { mainCross, accentCross };
+}
+
+function hStubs() {
   const stubDown = pathD([{ x: H_STUB_DOWN_X, y: H_CROSS_Y }, { x: H_STUB_DOWN_X, y: H_STUB_DOWN_Y }]);
   const stubUp = pathD([{ x: H_STUB_UP_X, y: H_CROSS_Y }, { x: H_STUB_UP_X, y: H_STUB_UP_Y }]);
-
-  return [...verticals, mainCross, accentCross, stubDown, stubUp];
+  return { stubDown, stubUp };
 }
 
 // ------------------------------------------------------- ring nodes ---
@@ -162,11 +209,12 @@ function hStrokes() {
 // Every node is a hollow ring: a stroked circle with no fill, so whatever
 // sits behind (the page background) shows through the centre. Radius is
 // the only thing that varies — large at trace terminals, smaller at
-// mid-trace and crossbar junctions — never a filled dot.
+// mid-trace and crossbar junctions — never a filled dot. Ring stroke width
+// is a single thin RING_WEIGHT tier (not the bold primary weight), so
+// rings stay legible rings instead of filling in to blobs at small sizes.
 
 function aRings(rLarge, rMed, rSmall, rMicro) {
-  const { above, below, aboveY, belowY } = aStubs();
-  void above; void below; // paths already captured in aStubs' d strings
+  const { aboveY, belowY } = aStubs();
   const midRingY_outer = A_APEX_Y_OUTER + A_MIDRING_T * (A_TERM_Y_OUTER - A_APEX_Y_OUTER);
   return [
     // Apex rings: large on the outer contour, smaller just below it on mid.
@@ -197,12 +245,12 @@ function hRings(rLarge, rMed, rSmall, rMicro) {
     { x: H_OUTER_L_X, y: H_OUTER_BOTTOM_Y, r: rLarge },
     { x: H_OUTER_R_X, y: H_OUTER_TOP_Y, r: rLarge, glow: true },
     { x: H_OUTER_R_X, y: H_OUTER_BOTTOM_Y, r: rLarge },
-    // Inner stems: shorter overshoot, medium rings.
+    // Inner stems: mildly staggered overshoot, medium rings.
     { x: H_INNER_L_X, y: H_INNER_TOP_Y, r: rMed },
     { x: H_INNER_L_X, y: H_INNER_BOTTOM_Y, r: rMed },
     { x: H_INNER_R_X, y: H_INNER_TOP_Y, r: rMed },
     { x: H_INNER_R_X, y: H_INNER_BOTTOM_Y, r: rMed },
-    // Thin flanking traces: shortest, smallest rings.
+    // Thin flanking traces: shortest, smallest rings — obviously ornament.
     { x: H_FLANK_L_X, y: H_FLANK_TOP_Y, r: rMicro },
     { x: H_FLANK_L_X, y: H_FLANK_BOTTOM_Y, r: rMicro },
     { x: H_FLANK_R_X, y: H_FLANK_TOP_Y, r: rMicro },
@@ -217,9 +265,22 @@ function hRings(rLarge, rMed, rSmall, rMicro) {
   ];
 }
 
-function strokePaths() {
+function primaryStrokePaths() {
+  const { outerPath } = aContours();
+  const [crossLeft, crossRight] = aInnerCrossbarPoints();
+  // Reinforces the A's crossbar at full weight without disturbing the
+  // (secondary-weight) closed inner contour it's part of.
+  const crossbarEmphasis = pathD([crossLeft, crossRight]);
+  const { mainCross } = hCrossbars();
+  return [outerPath, crossbarEmphasis, ...hStemVerticalPaths(), mainCross];
+}
+
+function secondaryStrokePaths() {
+  const { midPath, innerPath } = aContours();
   const { above, below } = aStubs();
-  return [...aContours(), above, below, ...hStrokes()];
+  const { accentCross } = hCrossbars();
+  const { stubDown, stubUp } = hStubs();
+  return [midPath, innerPath, above, below, ...hFlankVerticalPaths(), accentCross, stubDown, stubUp];
 }
 
 function ringNodes(rLarge, rMed, rSmall, rMicro) {
@@ -235,11 +296,17 @@ function ringNodes(rLarge, rMed, rSmall, rMicro) {
  * @param {string} [opts.color='#00B7FF'] Trace stroke + ring-node stroke
  *                                      colour. Pass white or black for the
  *                                      mono print variant. Never used as a
- *                                      fill — every shape is stroke-only.
- * @param {number} [opts.strokeWidth]    Stroke width in local (VIEW_W x
- *                                      VIEW_H) units. Defaults to VIEW_H/70
- *                                      — fine tracery, not a bold pictogram
- *                                      stroke.
+ *                                      fill (aside from the restrained glow
+ *                                      accents) — every letterform shape is
+ *                                      stroke-only.
+ * @param {number} [opts.strokeWidth]    PRIMARY stroke width, in local
+ *                                      (VIEW_W x VIEW_H) units — the weight
+ *                                      of the strokes that actually form the
+ *                                      letters. Secondary/ornamental strokes
+ *                                      and ring nodes are drawn thinner,
+ *                                      proportional to this value. Defaults
+ *                                      to VIEW_H/70 — fine tracery, not a
+ *                                      bold pictogram stroke.
  * @param {string|null} [opts.background=null] Optional solid backing rect
  *                                      colour; omitted (transparent) by default.
  * @returns {string} A complete `<svg>…</svg>` document.
@@ -257,6 +324,8 @@ export function monogramSVG(opts = {}) {
 
   const width = size;
   const height = size * (VIEW_H / VIEW_W);
+  const secondaryStrokeWidth = strokeWidth * SECONDARY_WEIGHT;
+  const ringStrokeWidth = strokeWidth * RING_WEIGHT;
 
   // Ring radii: large at overshoot terminals, medium at crossbar/inner
   // junctions, small at mid-trace rings, micro at floating stub terminals.
@@ -271,9 +340,8 @@ export function monogramSVG(opts = {}) {
     ? `<rect x="0" y="0" width="${VIEW_W}" height="${VIEW_H}" fill="${background}" />`
     : '';
 
-  const strokes = strokePaths()
-    .map((d) => `<path d="${d}" />`)
-    .join('');
+  const primaryStrokes = primaryStrokePaths().map((d) => `<path d="${d}" />`).join('');
+  const secondaryStrokes = secondaryStrokePaths().map((d) => `<path d="${d}" />`).join('');
 
   const rings = ringNodes(rLarge, rMed, rSmall, rMicro);
   const hasGlow = rings.some((n) => n.glow);
@@ -295,10 +363,12 @@ export function monogramSVG(opts = {}) {
     `viewBox="0 0 ${VIEW_W} ${VIEW_H}" role="img" aria-label="AH monogram">` +
     bg +
     defs +
-    `<g fill="none">${glowCircles}</g>` +
-    `<g fill="none" stroke="${color}" stroke-width="${strokeWidth}" ` +
-    `stroke-linecap="round" stroke-linejoin="round">${strokes}</g>` +
-    `<g fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round">${ringCircles}</g>` +
+    `<!-- glow --><g fill="none">${glowCircles}</g>` +
+    `<!-- secondary strokes --><g fill="none" stroke="${color}" stroke-width="${fmt(secondaryStrokeWidth)}" ` +
+    `stroke-linecap="round" stroke-linejoin="round">${secondaryStrokes}</g>` +
+    `<!-- primary strokes --><g fill="none" stroke="${color}" stroke-width="${fmt(strokeWidth)}" ` +
+    `stroke-linecap="round" stroke-linejoin="round">${primaryStrokes}</g>` +
+    `<!-- ring nodes --><g fill="none" stroke="${color}" stroke-width="${fmt(ringStrokeWidth)}" stroke-linecap="round">${ringCircles}</g>` +
     `</svg>`
   );
 }

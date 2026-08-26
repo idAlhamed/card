@@ -31,9 +31,9 @@ async function main() {
   await render('monogram-white.png', monogramSVG({ size: 480, color: '#FFFFFF', background: BLACK }));
 
   // Legibility check at the sizes it actually ships at: a small favicon-ish
-  // size, a mid-size UI use, and a large hero size. It must read as "AH"
-  // instantly at all three, not just the largest.
-  for (const size of [40, 80, 400]) {
+  // size, a mid-size UI use, a review size, and a large hero size. It must
+  // read as "AH" instantly at all four, not just the largest.
+  for (const size of [40, 80, 200, 400]) {
     await render(`monogram-${size}px.png`, monogramSVG({ size, color: ACCENT, background: BLACK }));
   }
 

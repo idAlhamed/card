@@ -213,27 +213,74 @@ test('the H crossbar carries two ring nodes: one centred, one off-centre', () =>
   assert.ok(xs.size >= 2, 'crossbar ring nodes must sit at distinct x positions (centre + off-centre)');
 });
 
+// Weight-tier groups are marked with an HTML comment immediately before
+// their <g>, so tests can pull each tier's own stroke-width rather than
+// grabbing whichever `stroke-width=` happens to appear first in the markup.
+function tierStrokeWidth(svg, marker) {
+  const re = new RegExp(`<!-- ${marker} --><g[^>]*stroke-width="([\\d.]+)"`);
+  const m = svg.match(re);
+  assert.ok(m, `expected a "${marker}" group with its own stroke-width`);
+  return Number(m[1]);
+}
+
 test('ring node radii are restrained to a small, varied set of sizes (terminals larger than junctions)', () => {
   const svg = monogramSVG();
-  const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
-  const ringGroup = svg.match(/<g fill="none" stroke="[^"]+" stroke-width="[^"]+" stroke-linecap="round">(.*?)<\/g>/)[1];
+  const primaryWidth = tierStrokeWidth(svg, 'primary strokes');
+  const ringGroup = svg.match(/<!-- ring nodes --><g[^>]*>(.*?)<\/g>/)[1];
   const radii = [...ringGroup.matchAll(/r="([\d.]+)"/g)].map((m) => Number(m[1]));
   assert.ok(radii.length > 10, 'expected many ring nodes across both letters');
   const distinct = new Set(radii);
   assert.ok(distinct.size >= 3 && distinct.size <= 5,
     `expected a small, restrained set of ring sizes, got ${distinct.size}`);
   for (const r of radii) {
-    const ratio = (r * 2) / strokeWidth;
-    assert.ok(ratio >= 1 && ratio <= 5, `ring diameter should stay within a legible range, got ${ratio}x stroke width`);
+    // Radii are sized relative to the PRIMARY (letter-forming) stroke
+    // weight, since that's the weight callers actually control via
+    // opts.strokeWidth.
+    const ratio = (r * 2) / primaryWidth;
+    assert.ok(ratio >= 1 && ratio <= 5, `ring diameter should stay within a legible range, got ${ratio}x primary stroke width`);
   }
 });
 
-test('default stroke width is fine tracery — about 1/70 of the mark height', () => {
+test('default primary stroke width is fine tracery — about 1/70 of the mark height', () => {
   const svg = monogramSVG();
   const [, , vbH] = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
-  const strokeWidth = Number(svg.match(/stroke-width="([\d.]+)"/)[1]);
-  assert.ok(Math.abs(strokeWidth / Number(vbH) - 1 / 70) < 0.005,
-    `expected strokeWidth/height ~ 1/70, got ${strokeWidth}/${vbH}`);
+  const primaryWidth = tierStrokeWidth(svg, 'primary strokes');
+  assert.ok(Math.abs(primaryWidth / Number(vbH) - 1 / 70) < 0.005,
+    `expected primary strokeWidth/height ~ 1/70, got ${primaryWidth}/${vbH}`);
+});
+
+test('secondary/ornamental strokes and ring nodes are visibly lighter than the primary letterform strokes', () => {
+  // This is the weight hierarchy that keeps the mark legible at small
+  // sizes: the strokes that actually form "A" and "H" must dominate, with
+  // detail tracery and ring outlines receding rather than competing.
+  const svg = monogramSVG();
+  const primaryWidth = tierStrokeWidth(svg, 'primary strokes');
+  const secondaryWidth = tierStrokeWidth(svg, 'secondary strokes');
+  const ringWidth = tierStrokeWidth(svg, 'ring nodes');
+  assert.ok(secondaryWidth < primaryWidth, 'secondary strokes must be thinner than primary strokes');
+  assert.ok(ringWidth < primaryWidth, 'ring node outlines must be thinner than primary strokes');
+  assert.ok(secondaryWidth <= primaryWidth * 0.7, 'secondary strokes must be meaningfully lighter, not just marginally');
+});
+
+test('the H main crossbar spans the full width between the two outer stems, at primary weight', () => {
+  const svg = monogramSVG();
+  const vw = viewWidth(svg);
+  const primaryGroup = svg.match(/<!-- primary strokes --><g[^>]*>(.*?)<\/g>/)[1];
+  const primaryPaths = parsePaths(`<g>${primaryGroup}</g>`);
+
+  const stemVerticals = primaryPaths.filter((p) => p.points.length === 2
+    && p.points[0][0] === p.points[1][0] && p.points[0][0] >= vw * 0.45);
+  assert.equal(stemVerticals.length, 4, 'expected the four main H stem traces at primary weight');
+  const stemXs = stemVerticals.map((p) => p.points[0][0]);
+  const leftmost = Math.min(...stemXs);
+  const rightmost = Math.max(...stemXs);
+
+  const mainCrossbar = primaryPaths.find((p) => p.points.length === 2
+    && p.points[0][1] === p.points[1][1] && p.points[0][0] >= vw * 0.45);
+  assert.ok(mainCrossbar, 'expected the main H crossbar in the primary-weight group');
+  const crossXs = [mainCrossbar.points[0][0], mainCrossbar.points[1][0]];
+  assert.equal(Math.min(...crossXs), leftmost, 'crossbar must reach the leftmost (outer) stem');
+  assert.equal(Math.max(...crossXs), rightmost, 'crossbar must reach the rightmost (outer) stem');
 });
 
 test('a few nodes carry a soft outer glow, rendered behind the ring (not replacing it)', () => {
@@ -244,8 +291,8 @@ test('a few nodes carry a soft outer glow, rendered behind the ring (not replaci
     'glow should be restrained to a few nodes, not applied everywhere');
 });
 
-test('renders legibly at 40px, 80px and 400px (smoke check: real pixels present)', async () => {
-  for (const size of [40, 80, 400]) {
+test('renders legibly at 40px, 80px, 200px and 400px (smoke check: real pixels present)', async () => {
+  for (const size of [40, 80, 200, 400]) {
     const svg = monogramSVG({ size, color: '#00B7FF', background: '#0A0A0C' });
     const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().raw()
       .toBuffer({ resolveWithObject: true });
