@@ -7,8 +7,11 @@ export class ConfigError extends Error {
   }
 }
 
-const REQUIRED_CONTENT = ['name', 'fullName', 'role', 'technologies', 'message', 'cta', 'footer'];
-const REQUIRED_CONTACTS = ['linkedin', 'github', 'whatsapp', 'phone', 'email'];
+const REQUIRED_CONTENT = [
+  'name', 'fullName', 'role', 'roleSecondary', 'technologies', 'message', 'cta', 'footer',
+  'taglineWallet', 'taglinePage', 'taglineCardFront',
+];
+const REQUIRED_CONTACTS = ['linkedin', 'github', 'whatsapp', 'phone', 'phoneDisplay', 'email', 'location'];
 const PLACEHOLDER = /YOUR_|REPLACE_|EXAMPLE|CHANGEME/i;
 
 export function validateConfig(raw) {
@@ -47,6 +50,23 @@ export function validateConfig(raw) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.contacts.email)) {
     throw new ConfigError(`config.contacts.email is not a valid address: "${raw.contacts.email}"`);
   }
+
+  const expertise = raw?.content?.expertise;
+  if (!Array.isArray(expertise) || expertise.length !== 9) {
+    throw new ConfigError(
+      `config.content.expertise must be an array of exactly 9 entries, got ${
+        Array.isArray(expertise) ? expertise.length : typeof expertise
+      }`
+    );
+  }
+  expertise.forEach((entry, i) => {
+    if (typeof entry?.icon !== 'string' || entry.icon.length === 0) {
+      throw new ConfigError(`config.content.expertise[${i}].icon is missing or empty`);
+    }
+    if (typeof entry?.label !== 'string' || entry.label.length === 0) {
+      throw new ConfigError(`config.content.expertise[${i}].label is missing or empty`);
+    }
+  });
 
   return raw;
 }

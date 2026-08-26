@@ -6,6 +6,7 @@ Committed deliberately so the build is reproducible and works offline.
 |---|---|---|
 | `fonts/Inter-*.ttf` | rsms/inter v4.1 | SIL Open Font Licence 1.1 (`fonts/OFL.txt`) |
 | `icons/*.svg` | simple-icons 13.0.0 | CC0 1.0 — public domain, no attribution required |
+| `lucide/*.svg` | lucide-icons/lucide 1.34.0 | ISC (`lucide/LICENSE`) |
 
 Inter is used only for rasterised and printed assets. The live web page uses
 SF Pro from the operating system and downloads no font at all.

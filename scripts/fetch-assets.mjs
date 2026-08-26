@@ -12,6 +12,14 @@ const INTER_TAG = 'v4.1';
 const INTER_ZIP = `https://github.com/rsms/inter/releases/download/${INTER_TAG}/Inter-4.1.zip`;
 const ICONS_TAG = '13.0.0';
 const ICONS = ['linkedin', 'github', 'discord', 'whatsapp'];
+const LUCIDE_TAG = '1.34.0';
+const LUCIDE_ICONS = [
+  // Expertise grid, in display order.
+  'smartphone', 'layers', 'gauge', 'app-window', 'cloud-upload',
+  'lightbulb', 'code-xml', 'shield-check', 'users',
+  // Buttons and contact rows.
+  'user-plus', 'phone', 'mail',
+];
 
 async function fetchInter() {
   const fontDir = new URL('vendor/fonts/', root);
@@ -79,9 +87,28 @@ async function fetchIcons() {
   }
 }
 
+async function fetchLucide() {
+  const iconDir = new URL('vendor/lucide/', root);
+  await mkdir(iconDir, { recursive: true });
+  for (const name of LUCIDE_ICONS) {
+    const url = `https://raw.githubusercontent.com/lucide-icons/lucide/${LUCIDE_TAG}/icons/${name}.svg`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Icon download failed: HTTP ${res.status} from ${url}`);
+    await writeFile(new URL(`${name}.svg`, iconDir), await res.text());
+    console.log(`  vendor/lucide/${name}.svg`);
+  }
+
+  const licenceUrl = `https://raw.githubusercontent.com/lucide-icons/lucide/${LUCIDE_TAG}/LICENSE`;
+  const licenceRes = await fetch(licenceUrl);
+  if (!licenceRes.ok) throw new Error(`Licence download failed: HTTP ${licenceRes.status} from ${licenceUrl}`);
+  await writeFile(new URL('LICENSE', iconDir), await licenceRes.text());
+  console.log('  vendor/lucide/LICENSE');
+}
+
 try {
   await fetchInter();
   await fetchIcons();
+  await fetchLucide();
   console.log('\nVendored assets ready. Commit them — the build must work offline.');
 } catch (err) {
   console.error(`\nVendoring failed: ${err.message}`);
@@ -93,5 +120,11 @@ try {
   for (const n of ICONS) {
     console.error(`     https://raw.githubusercontent.com/simple-icons/simple-icons/${ICONS_TAG}/icons/${n}.svg`);
   }
+  console.error(`  3. Save each of these into vendor/lucide/<name>.svg:`);
+  for (const n of LUCIDE_ICONS) {
+    console.error(`     https://raw.githubusercontent.com/lucide-icons/lucide/${LUCIDE_TAG}/icons/${n}.svg`);
+  }
+  console.error(`     Save the licence to vendor/lucide/LICENSE:`);
+  console.error(`     https://raw.githubusercontent.com/lucide-icons/lucide/${LUCIDE_TAG}/LICENSE`);
   process.exit(1);
 }

@@ -12,11 +12,17 @@ const escapeHTML = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace
 // The page uses a typographic apostrophe; config uses a straight one.
 const normalise = (s) => s.replace(/[‘’]/g, "'");
 
+// Redesign-foundations content: new copy consumed by the Wallet pass and
+// print artwork, and by the page once a later phase rebuilds it. Not yet
+// wired into src/index.html, so it's excluded here the same way fullName is.
+const NOT_YET_ON_PAGE = new Set(['roleSecondary', 'taglineWallet', 'taglinePage', 'taglineCardFront', 'expertise']);
+
 test('page copy matches config.json exactly', async () => {
   const config = await loadConfig();
   const html = normalise(await src('index.html'));
   for (const [key, value] of Object.entries(config.content)) {
     if (key === 'fullName') continue;   // used in the vCard, not rendered
+    if (NOT_YET_ON_PAGE.has(key)) continue;
     assert.ok(html.includes(escapeHTML(normalise(value))),
       `src/index.html is missing content.${key}: "${value}"`);
   }

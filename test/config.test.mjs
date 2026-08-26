@@ -50,6 +50,24 @@ test('names the exact missing content key', () => {
   assert.throws(() => validateConfig(c), /content\.technologies/);
 });
 
+test('rejects expertise with the wrong entry count', () => {
+  const c = validConfig();
+  c.content.expertise = c.content.expertise.slice(0, 3);
+  assert.throws(() => validateConfig(c), /content\.expertise/);
+});
+
+test('rejects an expertise entry missing an icon', () => {
+  const c = validConfig();
+  delete c.content.expertise[2].icon;
+  assert.throws(() => validateConfig(c), /content\.expertise\[2\]\.icon/);
+});
+
+test('rejects an expertise entry missing a label', () => {
+  const c = validConfig();
+  delete c.content.expertise[5].label;
+  assert.throws(() => validateConfig(c), /content\.expertise\[5\]\.label/);
+});
+
 test('loads and validates the real config.json', async () => {
   const c = await loadConfig();
   const url = new URL(c.url.CARD_URL);          // throws if unparseable
@@ -57,4 +75,9 @@ test('loads and validates the real config.json', async () => {
   assert.doesNotMatch(c.url.CARD_URL, /YOUR_|REPLACE_|EXAMPLE|CHANGEME/i);
   // Copy is genuinely fixed by the spec; the URL genuinely is not.
   assert.equal(c.content.technologies, 'Swift · SwiftUI · UIKit');
+  assert.equal(c.content.role, 'iOS Developer');
+  assert.equal(c.content.roleSecondary, 'SOFTWARE ENGINEER');
+  assert.equal(c.contacts.phone, '+966554248646');
+  assert.equal(c.contacts.phoneDisplay, '+966 55 424 8646');
+  assert.equal(c.content.expertise.length, 9);
 });

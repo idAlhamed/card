@@ -23,3 +23,21 @@ test('brand icons are vendored as single-path SVGs', async () => {
     assert.match(svg, /<path d="/, `${name}.svg must contain path data`);
   }
 });
+
+test('Lucide icons are vendored for the expertise grid and buttons', async () => {
+  const names = [
+    'smartphone', 'layers', 'gauge', 'app-window', 'cloud-upload',
+    'lightbulb', 'code-xml', 'shield-check', 'users',
+    'user-plus', 'phone', 'mail',
+  ];
+  for (const name of names) {
+    const svg = await readFile(new URL(`vendor/lucide/${name}.svg`, root), 'utf8');
+    assert.match(svg, /viewBox="0 0 24 24"/, `${name}.svg must use a 24x24 box`);
+    assert.match(svg, /stroke="currentColor"/, `${name}.svg must be recolourable via currentColor`);
+  }
+});
+
+test('the Lucide ISC licence travels with the icons', async () => {
+  const licence = await readFile(new URL('vendor/lucide/LICENSE', root), 'utf8');
+  assert.match(licence, /ISC License/);
+});
