@@ -307,11 +307,11 @@ test('the strip@3x master composites the logo without distorting it', async () =
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
   // A centre crop that comfortably contains the whole logo mark (composited
-  // in the strip's top band, roughly y=24..150 of 369 at @3x — see
+  // in the strip's top band, roughly y=18..168 of 369 at @3x — see
   // renderStripMaster's STRIP_PAD_TOP/STRIP_LOGO_H) and stays inside
   // circuitSVG's own contentClearX exclusion zone, so no stray trace pixel
   // can appear in it. Capped at 50% of the strip's height so it stops well
-  // short of SOFTWARE ENGINEER (which starts around y=233 of 369) — that
+  // short of SOFTWARE ENGINEER (which starts around y=255 of 369) — that
   // line is baked in the same bright blue as the logo, so a taller crop
   // would corrupt this ink-aspect measurement with unrelated text ink.
   const cropW = Math.round(width * 0.4);
@@ -342,8 +342,8 @@ test('SOFTWARE ENGINEER is baked into the strip in the requested accent blue (#0
   // Row band matching renderStripMaster's SOFTWARE ENGINEER placement (below
   // ALI HAMED, above iOS DEVELOPER) — generous margin either side so this
   // stays robust to small layout-constant tweaks.
-  const rowTop = Math.round(height * 0.60);
-  const rowHeight = Math.round(height * 0.12);
+  const rowTop = Math.round(height * 0.70);
+  const rowHeight = Math.round(height * 0.07);
   const rowBuffer = await strip
     .extract({ left: 0, top: rowTop, width, height: rowHeight })
     .png().toBuffer();
@@ -369,8 +369,8 @@ test('a small centered blue divider is baked directly beneath iOS DEVELOPER', as
   // (contentClearX only protects a centre column, not the whole row), so a
   // full-width scan would pick up unrelated circuit ink alongside the
   // divider. The divider's own content column is comfortably inside 60%.
-  const rowTop = Math.round(height * 0.83);
-  const rowHeight = Math.round(height * 0.12);
+  const rowTop = Math.round(height * 0.90);
+  const rowHeight = Math.round(height * 0.075);
   const colLeft = Math.round(width * 0.2);
   const colWidth = Math.round(width * 0.6);
   const rowBuffer = await strip
@@ -399,8 +399,8 @@ test('ALI HAMED is centered horizontally in the strip', async () => {
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
   // Row band matching renderStripMaster's ALI HAMED placement.
-  const rowTop = Math.round(height * 0.42);
-  const rowHeight = Math.round(height * 0.18);
+  const rowTop = Math.round(height * 0.47);
+  const rowHeight = Math.round(height * 0.22);
   const rowBuffer = await strip
     .extract({ left: 0, top: rowTop, width, height: rowHeight })
     .png().toBuffer();

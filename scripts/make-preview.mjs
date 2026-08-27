@@ -40,7 +40,17 @@ const at = (p) => new URL(p, root);
 // with zero scaling.
 const CARD_W = 750;
 const RADIUS = 28;      // rounded-rectangle corner radius, px at 2x
-const PAD = 44;          // padding below the QR panel, and around the tagline/QR column (the strip itself bleeds edge to edge, like a real storeCard strip)
+// Apple does not publish exact point values for the padding PassKit itself
+// draws around fields and the barcode — there is no public spec, only the
+// documented facts that fields sit directly under the strip and the
+// barcode sits near the bottom (see the Wallet Developer Guide). An
+// earlier revision of this preview used much larger, undocumented gaps
+// here (34pt/40pt at 1x between strip->tagline and tagline->barcode) that
+// were never grounded in anything iOS actually does, and read as an
+// exaggerated, airy gap that misrepresents how tightly a real installed
+// pass packs its fields and barcode together. These are now deliberately
+// tight, standard-padding values instead.
+const PAD = 36;          // padding below the QR panel, and around the tagline/QR column (the strip itself bleeds edge to edge, like a real storeCard strip)
 const MARGIN = 56;      // backdrop margin so the card's edges read clearly
 const BACKDROP = '#D9D9DE'; // neutral, distinct from the pass's own black
 
@@ -99,7 +109,11 @@ async function main() {
     weight: 'regular', fontSize: taglineFontSize, fill: pass.foregroundColor,
   });
   const taglineMeasured = place(taglineSVG, 0, 0); // measure first
-  const taglineY = stripBottom + 34;
+  // 20pt (at 2x) below the strip, not the previous 34pt: PassKit lays
+  // fields out directly under the strip image with the field area's own
+  // built-in padding, not a decorative gap on top of it — see the PAD
+  // comment above for what this preview's spacing is and isn't grounded in.
+  const taglineY = stripBottom + 20;
   const taglinePlaced = place(taglineSVG, (CARD_W - taglineMeasured.width) / 2, taglineY);
 
   // Barcode: a QR generated from the pass's own barcode message (mirroring
@@ -112,7 +126,9 @@ async function main() {
   const panelPad = 22;
   const panelSize = qrSize + panelPad * 2;
   const panelX = (CARD_W - panelSize) / 2;
-  const panelY = taglineY + taglineMeasured.height + 40;
+  // 28pt (at 2x) below the tagline, not the previous 40pt — see the PAD
+  // comment above.
+  const panelY = taglineY + taglineMeasured.height + 28;
 
   const CARD_H = Math.ceil(panelY + panelSize + PAD);
   const CANVAS_W = CARD_W + MARGIN * 2;

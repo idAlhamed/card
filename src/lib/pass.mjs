@@ -262,22 +262,46 @@ const STRIP_H = 123;
 // in renderStripMaster fails the build outright, at all three densities, if
 // a future edit ever makes the block taller than the strip, rather than
 // silently clipping or overlapping content on a real device.
-const STRIP_PAD_TOP = 8;
-const STRIP_LOGO_H = 42;
+//
+// preview/Ali-Hamed-Apple-Wallet-Pass-Updated.png (the current approved
+// reference) draws this block at proportions that are simply impossible
+// here: measured off that image, the logo alone runs ~44% of the identity
+// block's total height and the gaps between lines are each nearly as tall
+// as a line of text — reproduced at the reference's own ratios, the block
+// would need ~142pt inside a strip that only has 123pt total, at every
+// density. Scaling everything down uniformly (including the reference's
+// airy gaps) would leave the logo and ALI HAMED no larger than before,
+// which is not what "bring it as close as PassKit genuinely allows" means.
+// So instead: gaps are compressed well below the reference's proportions
+// (they are pure breathing room, the cheapest thing to cut), and the
+// recovered space is spent on the two things the reference makes clearly
+// dominant — the logo and ALI HAMED — both sized up from the previous
+// revision. SOFTWARE ENGINEER/iOS DEVELOPER/the divider keep the
+// reference's *rhythm* (each notably smaller than the line above it, in
+// the same order) without matching its absolute proportions, which the
+// fixed 123pt budget cannot hold alongside a generous logo and name.
+const STRIP_PAD_TOP = 6;
+const STRIP_LOGO_H = 50;
 const STRIP_GAP_LOGO_NAME = 6;
-const STRIP_NAME_FONT_SIZE = 23;
-const STRIP_GAP_NAME_ROLE2 = 5;
-const STRIP_ROLE2_FONT_SIZE = 15;
+const STRIP_NAME_FONT_SIZE = 26;
+const STRIP_GAP_NAME_ROLE2 = 4;
+const STRIP_ROLE2_FONT_SIZE = 14;
 const STRIP_GAP_ROLE2_ROLE = 4;
 const STRIP_ROLE_FONT_SIZE = 11;
-const STRIP_GAP_ROLE_DIVIDER = 7;
-const STRIP_DIVIDER_W = 40;
+const STRIP_GAP_ROLE_DIVIDER = 5;
+// Reference ratio (divider width : card width) scaled onto STRIP_W is
+// ~26pt; 32pt sits close to that while staying legible at @1x.
+const STRIP_DIVIDER_W = 32;
 const STRIP_DIVIDER_H = 2;
-const STRIP_PAD_BOTTOM = 8;
-// Letter-spacing-to-font-size ratio shared by all three baked-in lines,
-// matching the tracked-caps look already used for the primary field in
-// scripts/make-preview.mjs.
-const STRIP_TRACKING_RATIO = 0.08;
+const STRIP_PAD_BOTTOM = 6;
+// Letter-spacing-to-font-size ratio shared by SOFTWARE ENGINEER and iOS
+// DEVELOPER, matching the tracked-caps look already used for the primary
+// field in scripts/make-preview.mjs.
+const STRIP_TRACKING_RATIO = 0.09;
+// ALI HAMED alone gets wider tracking than the two role lines — the
+// reference's name line is visibly more separated, letter to letter, than
+// anything else in the block.
+const STRIP_NAME_TRACKING_RATIO = 0.14;
 
 // Exact hex the client asked for, and also circuit.mjs's own default
 // accentColor — so SOFTWARE ENGINEER and the divider read as the same blue
@@ -310,12 +334,12 @@ const STRIP_CLEAR_MARGIN = 20;
  * guarantee the logo composite gets from sourcing an appropriately large
  * raster up front.
  */
-async function renderStripLine(text, { weight, fontSize, color, scale }) {
+async function renderStripLine(text, { weight, fontSize, color, scale, trackingRatio = STRIP_TRACKING_RATIO }) {
   const scaledSize = fontSize * scale;
   const svgString = await wordmarkSVG(text, {
     weight,
     fontSize: scaledSize,
-    letterSpacing: scaledSize * STRIP_TRACKING_RATIO,
+    letterSpacing: scaledSize * trackingRatio,
     fill: color,
   });
   const [, w, h] = svgString.match(/width="([\d.]+)" height="([\d.]+)"/);
@@ -334,6 +358,7 @@ async function renderStripMaster(config) {
   // ---- Measure/render every text line up front, at this master's scale --
   const name = await renderStripLine(content.name, {
     weight: 'semibold', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
+    trackingRatio: STRIP_NAME_TRACKING_RATIO,
   });
   const role2 = await renderStripLine(content.roleSecondary, {
     weight: 'semibold', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
@@ -408,7 +433,18 @@ async function renderStripMaster(config) {
     width: STRIP_W,
     height: STRIP_H,
     seed: 'ali-hamed-wallet-strip',
-    density: 1.4, // matches the approved preview/_foundations/circuit-wallet-strip.png tuning
+    // preview/Ali-Hamed-Apple-Wallet-Pass-Updated.png runs its side circuits
+    // the full height of the pass silhouette (~430pt) at a row roughly every
+    // 11-12pt — far denser than this strip's previous density:1.4/default
+    // gridStep:16 tuning (8 rows in 123pt). The strip only has 123pt of
+    // canvas to work with regardless (see this file's header comment on why
+    // the motif can't fill the whole card), so matching the reference's row
+    // spacing rate, not its absolute row count, is what "as closely as the
+    // strip's aspect allows" means here: a smaller gridStep plus higher
+    // density packs proportionally more rows into the available height.
+    density: 3,
+    gridStep: 9,
+    strokeWidth: 1,
     contentClearX,
   });
   const circuitPng = await sharp(Buffer.from(circuitSvgString), { density: dpi })
