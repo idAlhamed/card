@@ -3,8 +3,10 @@
 `apple-wallet-pass.png` is a **design mockup**, not a signed pass. It shows
 how the pass will look using the real field values (rendered through
 `buildPassJSON()` in `src/lib/pass.mjs`) and the real generated images
-(`wallet/AliHamed.pass/logo@2x.png`, plus a QR code generated from the
-pass's own barcode message via `src/lib/qr.mjs`).
+(`wallet/AliHamed.pass/logo@2x.png` and `strip@2x.png` — the storeCard hero
+image: the circuit motif with the supplied AH logo composited on it — plus
+a QR code generated from the pass's own barcode message via
+`src/lib/qr.mjs`).
 
 `wallet/AliHamed.pass/pass.json` does not exist yet: `config.json`'s
 `apple.teamIdentifier` is empty because the client hasn't created a Pass

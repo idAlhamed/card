@@ -164,7 +164,7 @@ test('the built page renders one inline icon per icon token and no unresolved to
 });
 
 test('produces the pass assets even without a Team ID', async () => {
-  for (const f of ['icon.png', 'logo.png', 'logo@3x.png']) {
+  for (const f of ['icon.png', 'logo.png', 'logo@3x.png', 'strip.png', 'strip@2x.png', 'strip@3x.png']) {
     await assert.doesNotReject(access(new URL(`wallet/AliHamed.pass/${f}`, root)));
   }
 });

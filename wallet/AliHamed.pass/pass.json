@@ -8,7 +8,7 @@
   "backgroundColor": "rgb(0, 0, 0)",
   "foregroundColor": "rgb(245, 245, 247)",
   "labelColor": "rgb(134, 134, 139)",
-  "generic": {
+  "storeCard": {
     "primaryFields": [
       {
         "key": "name",
@@ -19,13 +19,15 @@
     "secondaryFields": [
       {
         "key": "role",
-        "label": "ROLE",
-        "value": "iOS Developer"
-      },
+        "label": "SOFTWARE ENGINEER",
+        "value": "iOS DEVELOPER"
+      }
+    ],
+    "auxiliaryFields": [
       {
-        "key": "stack",
-        "label": "TECHNOLOGIES",
-        "value": "Swift · SwiftUI · UIKit"
+        "key": "tagline",
+        "label": "",
+        "value": "Building mobile products, end to end."
       }
     ],
     "backFields": [

@@ -1,8 +1,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { buildPassJSON, renderPassAssets, PassError } from '../src/lib/pass.mjs';
+import { LOGO_RASTERS } from '../src/lib/logo.mjs';
 import { validConfig } from './fixtures.mjs';
+
+/**
+ * Bounding box of "ink" pixels in a PNG buffer, via a full raw scan.
+ * `isInk(r,g,b,a)` decides what counts — the source raster has a real
+ * transparent background (alpha-based works there), but the composited
+ * strip is painted onto a fully OPAQUE black canvas (every pixel has
+ * alpha 255), so isolating the logo there instead means matching its
+ * bright blue fill colour against the black/grey background and circuit
+ * traces.
+ */
+async function inkBBox(buffer, isInk) {
+  const { data, info } = await sharp(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+  let minX = info.width, maxX = 0, minY = info.height, maxY = 0;
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const i = (y * info.width + x) * info.channels;
+      if (isInk(data[i], data[i + 1], data[i + 2], data[i + 3])) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+}
+
+const isTransparentSourceInk = (_r, _g, _b, a) => a > 40;
+// Logo fill is #0087FF (a bright, saturated blue); circuit traces are a
+// mid-dark grey (#4B5563, blue channel ~99) or the dimmer accent blue used
+// for lit traces/nodes. This threshold catches the logo's fill while
+// staying well clear of both.
+const isCompositedLogoInk = (r, _g, b, _a) => b > 200 && r < 60;
 
 test('refuses to build while the Team ID is unset', () => {
   const c = validConfig();
@@ -35,6 +70,11 @@ test('the barcode message is exactly CARD_URL', () => {
   assert.equal(p.barcodes[0].messageEncoding, 'iso-8859-1');
 });
 
+test('the barcode carries no altText, so Wallet does not show the URL as visible text', () => {
+  const p = buildPassJSON(validConfig());
+  assert.equal(p.barcodes[0].altText, undefined);
+});
+
 test('uses the spec colours, in Apple\'s documented spaced rgb() format', () => {
   const p = buildPassJSON(validConfig());
   // PassKit's tolerance for the compact 'rgb(0,0,0)' form is unverified on
@@ -45,36 +85,60 @@ test('uses the spec colours, in Apple\'s documented spaced rgb() format', () => 
   assert.equal(p.labelColor, 'rgb(134, 134, 139)');
 });
 
-test('the primary field is the name, rendered at primary-field size', () => {
-  const c = validConfig();
-  const p = buildPassJSON(c);
-  // logo.png's 160x50pt slot can only ever fit the name at ~19pt; the
-  // primaryFields slot is how the name actually reads large on the pass.
-  assert.equal(p.generic.primaryFields[0].value, c.content.name);
+test('is a storeCard, not a generic pass — generic supports no strip image', () => {
+  const p = buildPassJSON(validConfig());
+  assert.ok(p.storeCard, 'must carry a storeCard style block');
+  assert.equal(p.generic, undefined, 'must not also carry a generic style block');
 });
 
-test('the role is a secondary field, labelled ROLE', () => {
+test('the primary field is the name, overlaid on the strip', () => {
   const c = validConfig();
   const p = buildPassJSON(c);
-  assert.equal(p.generic.secondaryFields[0].value, c.content.role);
-  assert.equal(p.generic.secondaryFields[0].label, 'ROLE');
+  assert.equal(p.storeCard.primaryFields.length, 1);
+  assert.equal(p.storeCard.primaryFields[0].value, c.content.name);
 });
 
-test('technologies appear as an auxiliary field with preserved casing', () => {
+test('the role pair is a single secondary field: roleSecondary as the label, role as the value', () => {
   const c = validConfig();
   const p = buildPassJSON(c);
-  assert.equal(p.generic.secondaryFields[1].value, c.content.technologies);
-  assert.equal(p.generic.secondaryFields[1].label, 'TECHNOLOGIES');
+  const field = p.storeCard.secondaryFields[0];
+  assert.equal(field.label, c.content.roleSecondary);
+  // Upper-cased but the "iOS" brand casing is preserved — matches the
+  // literal text already hardcoded in src/index.html's role-secondary
+  // paragraph, so the wallet pass and the page read identically.
+  assert.equal(field.value, 'iOS DEVELOPER');
+});
+
+test('the role value upper-cases every source casing the same way', () => {
+  const c = validConfig();
+  c.content.role = 'ios developer';
+  const p = buildPassJSON(c);
+  assert.equal(p.storeCard.secondaryFields[0].value, 'iOS DEVELOPER');
+});
+
+test('the tagline is its own auxiliary field', () => {
+  const c = validConfig();
+  const p = buildPassJSON(c);
+  assert.equal(p.storeCard.auxiliaryFields.length, 1);
+  assert.equal(p.storeCard.auxiliaryFields[0].value, c.content.taglineWallet);
 });
 
 test('all four contacts are tappable on the back', () => {
-  const back = buildPassJSON(validConfig()).generic.backFields;
+  const back = buildPassJSON(validConfig()).storeCard.backFields;
   for (const key of ['linkedin', 'github', 'whatsapp', 'email']) {
     const field = back.find((f) => f.key === key);
     assert.ok(field, `missing back field ${key}`);
     assert.match(field.attributedValue, /^<a href="/);
     assert.ok(field.value, 'a plain value must exist as fallback');
   }
+});
+
+test('every back field from the previous design is preserved (7 fields, same keys)', () => {
+  const back = buildPassJSON(validConfig()).storeCard.backFields;
+  assert.deepEqual(
+    back.map((f) => f.key),
+    ['message', 'cta', 'card', 'linkedin', 'github', 'whatsapp', 'email']
+  );
 });
 
 test('omits the update web service', () => {
@@ -87,13 +151,22 @@ test('no Apple mark or reference anywhere in the pass', () => {
   assert.doesNotMatch(JSON.stringify(buildPassJSON(validConfig())), /apple/i);
 });
 
+test('passTypeIdentifier and teamIdentifier are read from config, never hardcoded', () => {
+  const c = validConfig();
+  c.apple.passTypeIdentifier = 'pass.com.example.other';
+  c.apple.teamIdentifier = 'ZZZZZ99999';
+  const p = buildPassJSON(c);
+  assert.equal(p.passTypeIdentifier, 'pass.com.example.other');
+  assert.equal(p.teamIdentifier, 'ZZZZZ99999');
+});
+
 test('escapes " and & in back-field href/text so the anchor cannot break out', () => {
   const c = validConfig();
   // A real-world value: '&' is a common query separator, '"' is the one
   // character that can terminate the href attribute early.
   c.contacts.email = 'ali"o&reilly@example.com';
   const p = buildPassJSON(c);
-  const field = p.generic.backFields.find((f) => f.key === 'email');
+  const field = p.storeCard.backFields.find((f) => f.key === 'email');
 
   // Exact string, not just "doesn't crash": also proves '&' is escaped
   // FIRST, otherwise the '&' introduced by escaping '"' would itself get
@@ -114,7 +187,7 @@ test('the LinkedIn and GitHub back-field labels are derived from config, not har
   const c = validConfig();
   c.contacts.linkedin = 'https://www.linkedin.com/in/someoneelse/';
   c.contacts.github = 'https://github.com/SomeoneElse';
-  const back = buildPassJSON(c).generic.backFields;
+  const back = buildPassJSON(c).storeCard.backFields;
 
   const linkedin = back.find((f) => f.key === 'linkedin');
   const github = back.find((f) => f.key === 'github');
@@ -127,11 +200,12 @@ test('the LinkedIn and GitHub back-field labels are derived from config, not har
   assert.doesNotMatch(github.attributedValue, /idAlhamed/);
 });
 
-test('renders all six required assets at exact sizes', async () => {
+test('renders all nine required assets at exact sizes', async () => {
   const assets = await renderPassAssets(validConfig());
   const expected = {
     'icon.png': [29, 29], 'icon@2x.png': [58, 58], 'icon@3x.png': [87, 87],
     'logo.png': [160, 50], 'logo@2x.png': [320, 100], 'logo@3x.png': [480, 150],
+    'strip.png': [375, 123], 'strip@2x.png': [750, 246], 'strip@3x.png': [1125, 369],
   };
   assert.deepEqual([...assets.keys()].sort(), Object.keys(expected).sort());
   for (const [name, [w, h]] of Object.entries(expected)) {
@@ -142,57 +216,83 @@ test('renders all six required assets at exact sizes', async () => {
   }
 });
 
-test('renderPassAssets reads the monogram from config.content.name, not a hardcoded value', async () => {
-  // logo.png is now a fixed "Apple mark + Business Card" title (see
-  // renderLogo) and no longer varies with the name at all — the name moved
-  // to primaryFields in pass.json instead (asserted separately above). The
-  // drift risk this test originally guarded against — a name edited in
-  // config.json silently not reaching a rendered pass asset — now lives in
-  // icon.png (the AH monogram), so that's what this asserts against.
+test('icon.png is the supplied AH logo artwork, fixed regardless of config.content.name', async () => {
+  // A generated text monogram was rejected by the client; icon.png must now
+  // be the same fixed artwork as logo.png and strip.png, not something that
+  // silently redraws itself per name (the old text-monogram behaviour).
   const ali = validConfig();
   const jane = validConfig();
-  jane.content.name = 'JANE DOE';
+  jane.content.name = 'Jane Doe';
 
   const [aliAssets, janeAssets] = await Promise.all([
     renderPassAssets(ali),
     renderPassAssets(jane),
   ]);
 
-  assert.ok(
-    !aliAssets.get('icon.png').equals(janeAssets.get('icon.png')),
-    'a name edited in config.json must change the rendered icon, or Ali\'s pass silently drifts from his config'
-  );
-  assert.ok(
-    aliAssets.get('logo.png').equals(janeAssets.get('logo.png')),
-    'logo.png is now a fixed title (Apple mark + Business Card) and must not vary with the name'
-  );
+  for (const name of ['icon.png', 'icon@2x.png', 'icon@3x.png']) {
+    assert.ok(
+      aliAssets.get(name).equals(janeAssets.get(name)),
+      `${name} is fixed AH-logo artwork and must not vary with config.content.name`
+    );
+  }
 });
 
-test('the icon monogram is derived from the first two words of config.content.name', async () => {
-  const ali = validConfig(); // 'ALI HAMED' -> AH, same as the old hardcoded value
-  const adam = validConfig();
-  adam.content.name = 'Adam Harris'; // different full name, same AH monogram
+test('logo.png remains the fixed Apple-mark + Business Card title, unaffected by the name', async () => {
+  const ali = validConfig();
   const jane = validConfig();
-  jane.content.name = 'Jane Doe'; // different monogram entirely
+  jane.content.name = 'Jane Doe';
 
-  const [aliAssets, adamAssets, janeAssets] = await Promise.all([
+  const [aliAssets, janeAssets] = await Promise.all([
     renderPassAssets(ali),
-    renderPassAssets(adam),
     renderPassAssets(jane),
   ]);
 
-  assert.ok(
-    aliAssets.get('icon.png').equals(adamAssets.get('icon.png')),
-    'ALI HAMED and Adam Harris both derive the AH monogram and must render identical icons'
-  );
-  assert.ok(
-    !aliAssets.get('icon.png').equals(janeAssets.get('icon.png')),
-    'a different monogram must render a different icon'
-  );
+  assert.ok(aliAssets.get('logo.png').equals(janeAssets.get('logo.png')));
 });
 
-test('a single-word name produces a one-letter monogram without throwing', async () => {
-  const c = validConfig();
-  c.content.name = 'Cher';
-  await assert.doesNotReject(() => renderPassAssets(c));
+test('strip.png is fixed artwork (circuit + AH logo), unaffected by the name', async () => {
+  const ali = validConfig();
+  const jane = validConfig();
+  jane.content.name = 'Jane Doe';
+
+  const [aliAssets, janeAssets] = await Promise.all([
+    renderPassAssets(ali),
+    renderPassAssets(jane),
+  ]);
+
+  assert.ok(aliAssets.get('strip.png').equals(janeAssets.get('strip.png')));
+});
+
+test('the strip@3x master composites the logo without distorting it', async () => {
+  // The supplied 1200x800 canvas has generous internal padding, so the
+  // visible "AH" glyph's own ink is NOT itself a 3:2 (1200:800) shape —
+  // measured directly off the pristine source raster, its ink bounding box
+  // is close to 0.945:1. The real distortion guard is therefore: does the
+  // composited copy's ink aspect still match the SOURCE's ink aspect? A fit
+  // that stretched the logo during compositing would shift this ratio;
+  // preserving it is what "no distortion" actually means here.
+  const sourceInk = await inkBBox(await readFile(LOGO_RASTERS[1200]), isTransparentSourceInk);
+  const sourceAspect = sourceInk.width / sourceInk.height;
+
+  const assets = await renderPassAssets(validConfig());
+  const strip = sharp(assets.get('strip@3x.png'));
+  const { width, height } = await strip.metadata();
+  // A generous centre crop that comfortably contains the whole logo mark
+  // (composited within the top ~72% of strip height, centred horizontally)
+  // and stays inside circuitSVG's own contentClearX exclusion zone, so no
+  // stray trace pixel can appear in it.
+  const cropW = Math.round(width * 0.4);
+  const cropH = Math.round(height * 0.75);
+  const cropBuffer = await strip
+    .extract({ left: Math.round((width - cropW) / 2), top: 0, width: cropW, height: cropH })
+    .png().toBuffer();
+  const cropInk = await inkBBox(cropBuffer, isCompositedLogoInk);
+  assert.ok(cropInk.width > 0 && cropInk.height > 0, 'no logo ink found in the expected region');
+  const cropAspect = cropInk.width / cropInk.height;
+
+  assert.ok(
+    Math.abs(cropAspect - sourceAspect) / sourceAspect < 0.03,
+    `composited logo ink aspect ${cropAspect.toFixed(3)} strayed more than 3% ` +
+    `from the supplied artwork's own ink aspect ${sourceAspect.toFixed(3)} — a resize distorted it`
+  );
 });

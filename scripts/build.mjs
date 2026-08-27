@@ -88,10 +88,14 @@ console.log('  docs/  (staged site swapped into place)');
 
 // ---- Wallet ---------------------------------------------------------------
 await mkdir(at('wallet/AliHamed.pass/'), { recursive: true });
-for (const [name, buf] of await renderPassAssets(config)) {
+const passAssets = await renderPassAssets(config);
+for (const [name, buf] of passAssets) {
   await writeFile(at(`wallet/AliHamed.pass/${name}`), buf);
 }
-console.log('  wallet/AliHamed.pass/  (6 image assets)');
+// icon/@2x/@3x, logo/@2x/@3x, strip/@2x/@3x — kept as a live count, not a
+// hardcoded number, so this line can't silently go stale if the asset set
+// changes again.
+console.log(`  wallet/AliHamed.pass/  (${passAssets.size} image assets)`);
 
 try {
   const pass = buildPassJSON(config);

@@ -1,5 +1,8 @@
+import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { wordmarkSVG } from './text-path.mjs';
+import { circuitSVG } from './circuit.mjs';
+import { LOGO_ASPECT, logoRasterFor } from './logo.mjs';
 
 export class PassError extends Error {
   constructor(message) {
@@ -33,6 +36,22 @@ function shortUrl(href) {
     .replace(/^https?:\/\//, '')
     .replace(/^www\./, '')
     .replace(/\/$/, '');
+}
+
+// Wallet fields have no CSS-style text-transform: whatever casing a field's
+// value has in config.json is exactly what renders on the card. Every
+// front-of-pass string here already carries its intended display casing
+// (content.name is "ALI HAMED", content.roleSecondary is "SOFTWARE
+// ENGINEER") except content.role, authored in config.json as "iOS
+// Developer" for use elsewhere (e.g. the vCard title). Its intended
+// on-card display — full caps but preserving the "iOS" brand term's
+// lowercase "i" — already exists as a hardcoded literal in
+// src/index.html's <p class="role-secondary">iOS DEVELOPER</p>. This
+// reproduces that exact transform here so pass.mjs can derive it from the
+// same config.content.role rather than duplicating a second hardcoded
+// string that could drift from the first.
+function walletRoleCase(text) {
+  return String(text).toUpperCase().replace(/\bIOS\b/g, 'iOS');
 }
 
 export function buildPassJSON(config) {
@@ -70,22 +89,42 @@ export function buildPassJSON(config) {
     foregroundColor: 'rgb(245, 245, 247)',
     labelColor: 'rgb(134, 134, 139)',
 
-    generic: {
-      // The name lives in primaryFields, where Wallet renders it at
-      // primary-field size — far larger than the 160x50pt logo slot could
-      // ever fit it at. logo.png instead carries a small Apple mark +
-      // "Business Card" title (see renderLogo below), which is what
-      // identifies the pass by type when passes are stacked in Wallet.
+    // generic passes support no strip/background image at all, which is why
+    // an earlier version of this pass could never look like the approved
+    // reference (preview/Apple wallet update.png) — a plain field list on
+    // flat black. storeCard is the one PassKit style that gives a front-of-
+    // pass image (strip.png, see renderStripAssets below), so the circuit
+    // motif + supplied AH logo can appear on the card itself, matching the
+    // page. See wallet/README's layout note and the doc-comment above
+    // renderStripAssets for the full front-of-pass composition.
+    storeCard: {
+      // The strip IS the hero (circuit motif + AH logo, baked into
+      // strip.png — see renderStripAssets). Wallet overlays primaryFields
+      // on top of the strip, so this is deliberately kept to just the name:
+      // short and reliably one line, unlike a full sentence, and the strip
+      // is composed with its bottom third left solid black (no trace, no
+      // logo ink) specifically so this overlay never collides with the
+      // artwork regardless of exactly how a given iOS version aligns it.
       primaryFields: [
         { key: 'name', label: '', value: content.name },
       ],
-      // Wallet lays out the fields WITHIN one array horizontally (up to four),
-      // but secondaryFields and auxiliaryFields are two SEPARATE rows — one
-      // field in each stacks them vertically on device. Both live in
-      // secondaryFields so Wallet renders them side by side.
+      // Below the strip: two rows. Wallet always renders a field's label
+      // (small, labelColor) above its value (larger, foregroundColor), so
+      // pairing roleSecondary as the label and role as the value keeps the
+      // reference's top-to-bottom order (SOFTWARE ENGINEER, then iOS
+      // Developer) even though real Wallet fields have no per-field accent
+      // colour to reproduce the reference's blue/grey split — PassKit only
+      // exposes the three global colours declared above. content.role is
+      // upper-cased (preserving the "iOS" brand casing) to match how this
+      // exact string already appears, hardcoded, in src/index.html's
+      // role-secondary paragraph — see walletRoleCase below.
       secondaryFields: [
-        { key: 'role', label: 'ROLE', value: content.role },
-        { key: 'stack', label: 'TECHNOLOGIES', value: content.technologies },
+        { key: 'role', label: content.roleSecondary, value: walletRoleCase(content.role) },
+      ],
+      // The tagline gets its own row beneath that, so it reads as its own
+      // line rather than crowding the role pair.
+      auxiliaryFields: [
+        { key: 'tagline', label: '', value: content.taglineWallet },
       ],
       backFields: [
         { key: 'message', label: '', value: content.message },
@@ -128,27 +167,128 @@ export function buildPassJSON(config) {
 }
 
 // Render large, then downscale: rasterising an SVG at its final small size
-// produces soft edges on the 29px icon.
+// produces soft edges on small text (used below by renderLogoTitle).
 const RENDER_SIZE = 240;
 
-// First letter of each of the first two whitespace-separated words,
-// uppercased. 'ALI HAMED' -> 'AH'. A single-word name still yields a
-// (one-letter) monogram rather than throwing.
-export function monogram(name) {
-  const words = String(name).trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-}
+// icon.png is the client-supplied AH logo, not a derived text monogram — a
+// generated "AH" monogram was rejected by the client outright (see
+// src/lib/logo.mjs's header comment), and re-deriving one here would be
+// exactly that. This mirrors renderTouchIcon in site.mjs: the mark is fixed
+// artwork, centred on a black square with an even margin, and — like the
+// touch icon — it does NOT vary with config.content.name at all (the old
+// text-monogram path did; that drift is now moot because the image is fixed
+// regardless of name).
+//
+// 0.8 margin ratio matches renderTouchIcon's 144-of-180 proportion, so the
+// mark reads at the same relative size everywhere it appears.
+const ICON_MARGIN_RATIO = 0.8;
 
-async function renderIcon(size, initials) {
-  const mark = await wordmarkSVG(initials, {
-    fontSize: RENDER_SIZE, letterSpacing: RENDER_SIZE * 0.06, fill: '#F5F5F7',
-  });
-  const glyph = await sharp(Buffer.from(mark))
-    .resize({ width: Math.round(size * 0.62), fit: 'inside' })
-    .png().toBuffer();
+async function renderIcon(size) {
+  const width = Math.round(size * ICON_MARGIN_RATIO);
+  const height = Math.round(width / LOGO_ASPECT); // preserves the supplied 1200x800 ratio
+  const rasterBuffer = await readFile(logoRasterFor(width));
+  const mark = await sharp(rasterBuffer)
+    .resize({ width, height, fit: 'fill' }) // source rasters are already exactly 3:2, so this never distorts
+    .toBuffer();
   return sharp({
     create: { width: size, height: size, channels: 4, background: '#000000' },
-  }).composite([{ input: glyph, gravity: 'centre' }]).png().toBuffer();
+  }).composite([{ input: mark, gravity: 'centre' }]).png().toBuffer();
+}
+
+// ---- strip.png ----------------------------------------------------------
+// storeCard's strip.png is the pass's hero image: the circuit-trace motif
+// shared with the page (src/lib/circuit.mjs, untouched here — only the
+// arguments passed to it are specific to this composition) with the
+// supplied AH logo composited on top, centred in a "top band" that leaves
+// the bottom ~28% of the strip solid black. That reserved band is what lets
+// buildPassJSON's primaryFields (the name) safely overlay the strip — see
+// the comment there — because nothing in the strip artwork occupies that
+// vertical range.
+//
+// PassKit strip sizes are 375x123 / 750x246 / 1125x369, a straight 1x/2x/3x
+// of one artwork (Apple's Wallet HIG). Rather than calling circuitSVG() at
+// three different nominal pixel sizes — which would reseed its PRNG
+// differently at each size and produce three visibly different patterns,
+// not a clean multiple of the same artwork — this renders ONE vector
+// composition at the logical 375x123 size and rasterises it at increasing
+// density (SVG DPI) to get pixel-exact 2x/3x output, confirmed empirically:
+// sharp treats an unitless SVG width as px at a 72dpi baseline, so density
+// 72/144/216 yields exactly 375x123 / 750x246 / 1125x369. The full
+// composite (circuit + logo) is then built once at the highest density
+// (@3x) and downscaled for @2x/@1x — the same "render large, then
+// downscale" principle already used for renderIcon/renderLogo above, just
+// applied the other direction (build once at max density, shrink down)
+// since here the "large source" is the rasterisation itself, not a
+// pre-existing big bitmap.
+const STRIP_W = 375;
+const STRIP_H = 123;
+// Fraction of the strip kept solid black at the bottom — see the class
+// comment above.
+const STRIP_BOTTOM_CLEAR = 0.28;
+const STRIP_TOP_BAND = STRIP_H - Math.round(STRIP_H * STRIP_BOTTOM_CLEAR); // 89pt
+// How tall the AH logo renders within that top band, as a fraction of it —
+// leaves an even margin around the mark so it doesn't crowd the strip's
+// own edges or the bottom-clear boundary.
+const STRIP_LOGO_HEIGHT_RATIO = 0.75;
+// Circuit traces are kept clear of a column centred on the logo (mirrors
+// CONTENT_CLEAR_X in site.mjs, which does the same for the page's motif).
+// This only needs to be approximately right — it is a safety margin passed
+// to circuitSVG, not a pixel-exact composite — so an un-rounded estimate of
+// the logo's footprint is good enough here.
+const STRIP_CLEAR_MARGIN = 24;
+const STRIP_APPROX_LOGO_H = STRIP_TOP_BAND * STRIP_LOGO_HEIGHT_RATIO;
+const STRIP_APPROX_LOGO_W = STRIP_APPROX_LOGO_H * LOGO_ASPECT;
+const STRIP_CONTENT_CLEAR_X = [
+  Math.round((STRIP_W - STRIP_APPROX_LOGO_W) / 2 - STRIP_CLEAR_MARGIN),
+  Math.round((STRIP_W + STRIP_APPROX_LOGO_W) / 2 + STRIP_CLEAR_MARGIN),
+];
+
+async function renderStripMaster() {
+  const scale = 3; // build at @3x; @2x/@1x are downscaled from this buffer
+  const dpi = 72 * scale;
+
+  const circuitSvgString = circuitSVG({
+    width: STRIP_W,
+    height: STRIP_TOP_BAND,
+    seed: 'ali-hamed-wallet-strip',
+    density: 1.4, // matches the approved preview/_foundations/circuit-wallet-strip.png tuning
+    contentClearX: STRIP_CONTENT_CLEAR_X,
+  });
+  const circuitPng = await sharp(Buffer.from(circuitSvgString), { density: dpi })
+    .png().toBuffer();
+
+  // Exact-aspect logo composite, computed directly at this render's pixel
+  // scale (not scaled up from an already-rounded 1x value), keeping
+  // rounding error to a small fraction of a pixel.
+  const logoHeightPx = Math.round(STRIP_TOP_BAND * scale * STRIP_LOGO_HEIGHT_RATIO);
+  const logoWidthPx = Math.round(logoHeightPx * LOGO_ASPECT);
+  const rasterBuffer = await readFile(logoRasterFor(logoWidthPx));
+  const logo = await sharp(rasterBuffer)
+    .resize({ width: logoWidthPx, height: logoHeightPx, fit: 'fill' })
+    .toBuffer();
+
+  const canvasW = STRIP_W * scale;
+  const canvasH = STRIP_H * scale;
+  const logoLeft = Math.round((canvasW - logoWidthPx) / 2);
+  const logoTop = Math.round((STRIP_TOP_BAND * scale - logoHeightPx) / 2);
+
+  return sharp({
+    create: { width: canvasW, height: canvasH, channels: 4, background: '#000000' },
+  })
+    .composite([
+      { input: circuitPng, left: 0, top: 0 },
+      { input: logo, left: logoLeft, top: logoTop },
+    ])
+    .png().toBuffer();
+}
+
+async function renderStripAssets() {
+  const master = await renderStripMaster(); // 1125x369 (@3x)
+  const [x2, x1] = await Promise.all([
+    sharp(master).resize(STRIP_W * 2, STRIP_H * 2).png().toBuffer(),
+    sharp(master).resize(STRIP_W, STRIP_H).png().toBuffer(),
+  ]);
+  return { x1, x2, x3: master };
 }
 
 // logo.png is now the pass TITLE, not the name: a small Apple mark followed
@@ -262,21 +402,23 @@ async function renderLogo(width, height) {
     .png().toBuffer();
 }
 
-// Reads the wordmark from config.content.name rather than hardcoding it, so
-// editing the name in config.json doesn't leave the pass icon silently
-// stale (the same drift class fixed elsewhere for vCard escaping, the OG
-// bounds guard, and the icon error messages). logo.png no longer carries
-// the name at all — see renderLogo above — so icon.png (the AH monogram)
-// is now the only pass image that varies with config.content.name.
-export async function renderPassAssets(config) {
-  const name = config.content.name;
-  const initials = monogram(name);
+// Every image this renders is now fixed, client-supplied artwork (the AH
+// logo) or a fixed composition built from it — none of it varies with
+// config.content.name any more (icon.png used to; see renderIcon above).
+// _config is accepted-but-unused so build.mjs's call site (which still has
+// a config to pass) doesn't need to change, matching the same convention
+// already used by site.mjs's renderTouchIcon.
+export async function renderPassAssets(_config) {
+  const strips = await renderStripAssets();
   return new Map([
-    ['icon.png', await renderIcon(29, initials)],
-    ['icon@2x.png', await renderIcon(58, initials)],
-    ['icon@3x.png', await renderIcon(87, initials)],
+    ['icon.png', await renderIcon(29)],
+    ['icon@2x.png', await renderIcon(58)],
+    ['icon@3x.png', await renderIcon(87)],
     ['logo.png', await renderLogo(160, 50)],
     ['logo@2x.png', await renderLogo(320, 100)],
     ['logo@3x.png', await renderLogo(480, 150)],
+    ['strip.png', strips.x1],
+    ['strip@2x.png', strips.x2],
+    ['strip@3x.png', strips.x3],
   ]);
 }

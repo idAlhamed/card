@@ -1,6 +1,14 @@
 // Renders preview/apple-wallet-pass.png: a design mockup of the Apple
 // Wallet pass, built from the REAL pass field values (via buildPassJSON())
-// and the REAL generated pass images (wallet/AliHamed.pass/logo@2x.png).
+// and the REAL generated pass images (wallet/AliHamed.pass/strip@2x.png,
+// logo@2x.png). This depicts the storeCard layout PassKit actually renders
+// — header (logo top-left), then strip.png edge-to-edge, then
+// primaryFields overlaid on the strip, then secondaryFields and
+// auxiliaryFields as left-aligned rows below it, then the QR barcode —
+// rather than an idealised marketing mockup: no card-shaped notch, no
+// centred text, nothing PassKit itself wouldn't actually draw. See
+// src/lib/pass.mjs's buildPassJSON and renderStripAssets doc-comments for
+// why each field lives where it does.
 //
 // wallet/AliHamed.pass/pass.json does not exist yet — config.json's
 // apple.teamIdentifier is empty because the client has not created a Pass
@@ -24,14 +32,13 @@ const root = new URL('../', import.meta.url);
 const at = (p) => new URL(p, root);
 
 // Card geometry in PassKit points, doubled for @2x — same convention the
-// pass image assets themselves use (logo@2x.png etc).
-const CARD_W = 320 * 2; // 640
-const CARD_H = 440 * 2; // 880
-const RADIUS = 24;      // rounded-rectangle corner radius, px at 2x
-const PAD = 40;         // inner content padding, px at 2x
+// pass image assets themselves use (logo@2x.png, strip@2x.png). CARD_W is
+// pinned to strip@2x.png's own native width (750) so the strip composites
+// at 1:1 with zero scaling.
+const CARD_W = 750;
+const RADIUS = 28;      // rounded-rectangle corner radius, px at 2x
+const PAD = 44;          // inner content padding for header/fields/QR (the strip itself bleeds edge to edge, like a real storeCard strip)
 const MARGIN = 56;      // backdrop margin so the card's edges read clearly
-const CANVAS_W = CARD_W + MARGIN * 2;
-const CANVAS_H = CARD_H + MARGIN * 2;
 const BACKDROP = '#D9D9DE'; // neutral, distinct from the pass's own black
 
 /** Wraps a wordmarkSVG() result so it can be placed at (x, y) inside a parent SVG. */
@@ -41,15 +48,13 @@ function place(svgString, x, y) {
   return { markup: `<g transform="translate(${x} ${y})">${inner}</g>`, width: Number(w), height: Number(h) };
 }
 
-async function loadLogo() {
-  // Prefer logo@2x.png (320x100 — already sized for this canvas's 2x
-  // scale). Fall back to downscaling logo@3x.png if @2x is ever missing.
+async function loadPassImage(name, fallbackName, fallbackResize) {
   try {
-    return await readFile(at('wallet/AliHamed.pass/logo@2x.png'));
+    return await readFile(at(`wallet/AliHamed.pass/${name}`));
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
-    const logo3x = await readFile(at('wallet/AliHamed.pass/logo@3x.png'));
-    return sharp(logo3x).resize(320, 100, { fit: 'inside' }).png().toBuffer();
+    const fallback = await readFile(at(`wallet/AliHamed.pass/${fallbackName}`));
+    return sharp(fallback).resize(...fallbackResize).png().toBuffer();
   }
 }
 
@@ -63,79 +68,89 @@ async function main() {
   previewConfig.apple.teamIdentifier = 'XXXXXXXXXX';
 
   const pass = buildPassJSON(previewConfig);
-  const primary = pass.generic.primaryFields[0];   // name
-  const secondary = pass.generic.secondaryFields[0]; // role
-  const auxiliary = pass.generic.secondaryFields[1];  // technologies
+  const primary = pass.storeCard.primaryFields[0];      // name, overlaid on the strip
+  const role = pass.storeCard.secondaryFields[0];        // { label: roleSecondary, value: role }
+  const tagline = pass.storeCard.auxiliaryFields[0];     // taglineWallet
 
-  const logoBuffer = await loadLogo();
+  // Prefer the real @2x assets (already sized for this canvas's 2x scale);
+  // fall back to downscaling the @3x asset if @2x is ever missing.
+  const [logoBuffer, stripBuffer] = await Promise.all([
+    loadPassImage('logo@2x.png', 'logo@3x.png', [320, 100, { fit: 'inside' }]),
+    loadPassImage('strip@2x.png', 'strip@3x.png', [750, 246, { fit: 'inside' }]),
+  ]);
+
   const logoMeta = await sharp(logoBuffer).metadata();
-  // Fit the logo into a top strip, scaled down from its native 320x100 so
-  // it reads as a header rather than dominating the card. The logo is now
-  // the Apple-mark + "Business Card" title, not the name (see
-  // src/lib/pass.mjs renderLogo) — it must stay quiet up here.
   const logoHeight = 44;
   const logoWidth = Math.round((logoMeta.width / logoMeta.height) * logoHeight);
   const logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
 
-  // The name is the primaryField now, so it renders at primaryField size —
-  // far larger than the 18.8pt the 160x50pt logo slot ever allowed. 0.08em
-  // tracking is unchanged from the old logo rendering (client request: keep
-  // the current restrained tracking) — at this larger size it's the same
-  // relative letterspacing, just no longer width-constrained to 160pt.
-  // Reduced from 80 (~17.5%) — at 80 the name overwhelmed the header and
-  // the rest of the pass; still far larger than ROLE/TECHNOLOGIES below it.
-  const primaryFontSize = 56;
-  const [primarySVG, roleLabelSVG, roleValueSVG, stackLabelSVG, stackValueSVG] = await Promise.all([
-    wordmarkSVG(primary.value, { fontSize: primaryFontSize, letterSpacing: primaryFontSize * 0.08, fill: pass.foregroundColor }),
-    wordmarkSVG(secondary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
-    wordmarkSVG(secondary.value, { weight: 'regular', fontSize: 24, fill: pass.foregroundColor }),
-    wordmarkSVG(auxiliary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
-    wordmarkSVG(auxiliary.value, { weight: 'regular', fontSize: 20, fill: pass.foregroundColor }),
-  ]);
+  const stripMeta = await sharp(stripBuffer).metadata();
+  const stripDataUri = `data:image/png;base64,${stripBuffer.toString('base64')}`;
+  const stripTop = PAD + logoHeight + 16;
+  const stripBottom = stripTop + stripMeta.height;
 
-  const primaryY = PAD + logoHeight + 56;
+  // primaryFields (name): overlaid on the strip's bottom-left, inside the
+  // solid-black band renderStripAssets() reserves there (see its
+  // doc-comment) — this mockup positions it the same way real Wallet does
+  // for a storeCard's primary field.
+  const primaryFontSize = 40;
+  const primarySVG = await wordmarkSVG(primary.value, {
+    fontSize: primaryFontSize, letterSpacing: primaryFontSize * 0.08, fill: pass.foregroundColor,
+  });
+  const primaryPlaced0 = place(primarySVG, 0, 0); // measure first
+  const primaryY = stripBottom - primaryPlaced0.height - 18;
   const primaryPlaced = place(primarySVG, PAD, primaryY);
 
-  // Secondary (ROLE) and auxiliary (TECHNOLOGIES) fields sit side by side
-  // in a row beneath the primary field, mirroring how Wallet lays out a
-  // generic pass's secondaryFields/auxiliaryFields row. The gap below the
-  // primary field is widened from 48 to 58 to offset its shorter glyph
-  // height, so this row lands at roughly the same spot it did before the
-  // primary field's type size was reduced.
-  const fieldsY = primaryY + primaryPlaced.height + 66;
-  const leftColX = PAD;
-  const rightColX = CARD_W / 2 + 12;
+  // secondaryFields row: field.label above field.value, stacked — how
+  // Wallet renders every field, front or back.
+  const roleLabelSVG = await wordmarkSVG(role.label, {
+    weight: 'regular', fontSize: 16, letterSpacing: 16 * 0.12, fill: pass.labelColor,
+  });
+  const roleValueSVG = await wordmarkSVG(role.value, {
+    weight: 'regular', fontSize: 26, fill: pass.foregroundColor,
+  });
+  const roleY = stripBottom + 34;
+  const roleLabelPlaced = place(roleLabelSVG, PAD, roleY);
+  const roleValueY = roleY + roleLabelPlaced.height + 10;
+  const roleValuePlaced = place(roleValueSVG, PAD, roleValueY);
 
-  const roleLabelPlaced = place(roleLabelSVG, leftColX, fieldsY);
-  const roleValueY = fieldsY + roleLabelPlaced.height + 12;
-  const roleValuePlaced = place(roleValueSVG, leftColX, roleValueY);
-
-  const stackLabelPlaced = place(stackLabelSVG, rightColX, fieldsY);
-  const stackValueY = fieldsY + stackLabelPlaced.height + 12;
-  const stackValuePlaced = place(stackValueSVG, rightColX, stackValueY);
+  // auxiliaryFields row: the tagline, its own row beneath the role pair.
+  const taglineSVG = await wordmarkSVG(tagline.value, {
+    weight: 'regular', fontSize: 20, fill: pass.foregroundColor,
+  });
+  const taglineY = roleValueY + roleValuePlaced.height + 30;
+  const taglinePlaced = place(taglineSVG, PAD, taglineY);
 
   // Barcode: a QR generated from the pass's own barcode message (mirroring
   // how Wallet renders the barcode itself), sat in a white rounded panel
   // near the bottom of the card.
-  const qrSize = 260;
+  const qrSize = 240;
   const qrBuffer = await generateQRPNG(pass.barcodes[0].message, { width: qrSize });
   const qrDataUri = `data:image/png;base64,${qrBuffer.toString('base64')}`;
-  const panelPad = 24;
+  const panelPad = 22;
   const panelSize = qrSize + panelPad * 2;
   const panelX = (CARD_W - panelSize) / 2;
-  const panelY = CARD_H - PAD - panelSize;
+  const panelY = taglineY + taglinePlaced.height + 40;
+
+  const CARD_H = Math.ceil(panelY + panelSize + PAD);
+  const CANVAS_W = CARD_W + MARGIN * 2;
+  const CANVAS_H = CARD_H + MARGIN * 2;
 
   const cardSVG = `
     <g transform="translate(${MARGIN} ${MARGIN})">
+      <clipPath id="cardClip"><rect width="${CARD_W}" height="${CARD_H}" rx="${RADIUS}" ry="${RADIUS}" /></clipPath>
       <rect width="${CARD_W}" height="${CARD_H}" rx="${RADIUS}" ry="${RADIUS}"
             fill="${pass.backgroundColor}" />
-      <image x="${PAD}" y="${PAD}" width="${logoWidth}" height="${logoHeight}"
-             href="${logoDataUri}" />
-      ${primaryPlaced.markup}
+      <g clip-path="url(#cardClip)">
+        <image x="${PAD}" y="${PAD}" width="${logoWidth}" height="${logoHeight}"
+               href="${logoDataUri}" />
+        <image x="0" y="${stripTop}" width="${stripMeta.width}" height="${stripMeta.height}"
+               href="${stripDataUri}" />
+        ${primaryPlaced.markup}
+      </g>
       ${roleLabelPlaced.markup}
       ${roleValuePlaced.markup}
-      ${stackLabelPlaced.markup}
-      ${stackValuePlaced.markup}
+      ${taglinePlaced.markup}
       <rect x="${panelX}" y="${panelY}" width="${panelSize}" height="${panelSize}"
             rx="16" ry="16" fill="#FFFFFF" />
       <image x="${panelX + panelPad}" y="${panelY + panelPad}" width="${qrSize}" height="${qrSize}"
