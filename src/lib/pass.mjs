@@ -297,11 +297,11 @@ const STRIP_PAD_BOTTOM = 6;
 // Letter-spacing-to-font-size ratio shared by SOFTWARE ENGINEER and iOS
 // DEVELOPER, matching the tracked-caps look already used for the primary
 // field in scripts/make-preview.mjs.
-const STRIP_TRACKING_RATIO = 0.09;
+const STRIP_TRACKING_RATIO = 0.13;
 // ALI HAMED alone gets wider tracking than the two role lines — the
 // reference's name line is visibly more separated, letter to letter, than
 // anything else in the block.
-const STRIP_NAME_TRACKING_RATIO = 0.14;
+const STRIP_NAME_TRACKING_RATIO = 0.22;
 
 // Exact hex the client asked for, and also circuit.mjs's own default
 // accentColor — so SOFTWARE ENGINEER and the divider read as the same blue
@@ -317,6 +317,17 @@ const STRIP_FOREGROUND_COLOR = '#F5F5F7';
 // DEVELOPER is rendered in this colour, matching the reference's secondary
 // (grey) weight.
 const LABEL_COLOR = '#86868B';
+
+// circuit.mjs's own defaults (DEFAULT_BASE '#4B5563' at baseOpacity 0.7) are
+// tuned for the page-sized motif, which has far more room to breathe. At the
+// strip's cramped 123pt height the same grey read as light and busy, sitting
+// forward and competing with the type instead of receding behind it — the
+// reference's unlit traces are dark, quiet, barely-there against the black,
+// with only the lit blue minority actually drawing the eye. A darker,
+// lower-opacity override for just this composition pulls the unlit traces
+// back without touching circuit.mjs's own defaults (still used by the page).
+const STRIP_TRACE_BASE_COLOR = '#2A3038';
+const STRIP_TRACE_BASE_OPACITY = 0.4;
 
 // Circuit traces are kept clear of a column centred on the strip (mirrors
 // CONTENT_CLEAR_X in site.mjs, which does the same for the page's motif).
@@ -356,12 +367,21 @@ async function renderStripMaster(config) {
   const pt = (v) => Math.round(v * scale); // logical points -> this render's pixels
 
   // ---- Measure/render every text line up front, at this master's scale --
+  // 'regular' is the lightest Inter weight actually vendored (see
+  // vendor/fonts/ — only Regular and SemiBold ship; there is no Light in
+  // this repo and none may be added). The reference's ALI HAMED reads as a
+  // true light weight; regular is the closest this build can get, paired
+  // with substantially wider tracking (STRIP_NAME_TRACKING_RATIO) to carry
+  // the rest of that "light and airy" impression semibold could not.
   const name = await renderStripLine(content.name, {
-    weight: 'semibold', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
+    weight: 'regular', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
     trackingRatio: STRIP_NAME_TRACKING_RATIO,
   });
+  // Same reasoning as ALI HAMED above: the reference sets SOFTWARE ENGINEER
+  // noticeably lighter than the previous semibold rendering, wide-tracked
+  // under the name, not as a bold banner in its own right.
   const role2 = await renderStripLine(content.roleSecondary, {
-    weight: 'semibold', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
+    weight: 'regular', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
   });
   // walletRoleCase upper-cases while preserving "iOS"'s lowercase "i" (see
   // its own doc-comment above) — reused here, not duplicated, so the
@@ -423,6 +443,22 @@ async function renderStripMaster(config) {
     );
   }
 
+  // Same guard, the other axis: the widest baked-in line (always ALI HAMED
+  // in practice — the name is both the largest font size and the widest
+  // tracking ratio of anything in the block) must fit inside the strip's
+  // fixed width too. This matters specifically because STRIP_NAME_TRACKING_RATIO
+  // widens the name's measured advance; a sufficiently long config.content.name
+  // could in principle push it past canvasW, which composite() would silently
+  // clip (Math.round((canvasW - item.width) / 2) goes negative) rather than
+  // fail loudly, so it is checked explicitly here instead.
+  if (widestWidthPx > canvasW) {
+    throw new PassError(
+      `Wallet strip content (${(widestWidthPx / scale).toFixed(1)}pt wide) overflows the ` +
+      `fixed strip width (${STRIP_W}pt) — shorten config.content.name/roleSecondary or ` +
+      'reduce STRIP_NAME_TRACKING_RATIO/STRIP_TRACKING_RATIO in src/lib/pass.mjs.'
+    );
+  }
+
   // ---- Circuit background, kept clear of the centred content column -----
   const widestWidthPt = widestWidthPx / scale;
   const contentClearX = [
@@ -446,6 +482,11 @@ async function renderStripMaster(config) {
     gridStep: 9,
     strokeWidth: 1,
     contentClearX,
+    // See STRIP_TRACE_BASE_COLOR/STRIP_TRACE_BASE_OPACITY above: darker,
+    // quieter unlit traces than circuit.mjs's page-tuned defaults, so the
+    // motif recedes behind the identity block instead of competing with it.
+    baseColor: STRIP_TRACE_BASE_COLOR,
+    baseOpacity: STRIP_TRACE_BASE_OPACITY,
   });
   const circuitPng = await sharp(Buffer.from(circuitSvgString), { density: dpi })
     .png().toBuffer();

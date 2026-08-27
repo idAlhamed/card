@@ -17,11 +17,12 @@ import { validConfig } from './fixtures.mjs';
  */
 async function inkBBox(buffer, isInk) {
   const { data, info } = await sharp(buffer).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
-  let minX = info.width, maxX = 0, minY = info.height, maxY = 0;
+  let minX = info.width, maxX = 0, minY = info.height, maxY = 0, count = 0;
   for (let y = 0; y < info.height; y++) {
     for (let x = 0; x < info.width; x++) {
       const i = (y * info.width + x) * info.channels;
       if (isInk(data[i], data[i + 1], data[i + 2], data[i + 3])) {
+        count++;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -29,7 +30,15 @@ async function inkBBox(buffer, isInk) {
       }
     }
   }
-  return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const bboxArea = width * height;
+  // fillRatio: ink pixels / bbox area — a proxy for stroke weight. A bolder
+  // font weight fills more of its own bounding box (thicker strokes, less
+  // interior negative space) than a lighter one at the same size/tracking;
+  // used by the strip's weight-guard tests below to catch a regression back
+  // to a heavier weight without hardcoding a specific rendering pipeline.
+  return { minX, maxX, minY, maxY, width, height, count, fillRatio: bboxArea > 0 ? count / bboxArea : 0 };
 }
 
 const isTransparentSourceInk = (_r, _g, _b, a) => a > 40;
@@ -413,4 +422,136 @@ test('ALI HAMED is centered horizontally in the strip', async () => {
     Math.abs(nameCenterX - width / 2) < width * 0.03,
     `ALI HAMED centre ${nameCenterX} should be within 3% of the strip's midpoint ${width / 2}`
   );
+});
+
+// ---- Refinement pass: ALI HAMED / SOFTWARE ENGINEER read as light and
+// wide-tracked, matching preview/Ali-Hamed-Apple-Wallet-Pass-Updated.png,
+// not the blunt/generic semibold banner look the previous pass produced.
+// vendor/fonts/ ships only Inter-Regular and Inter-SemiBold — no Light — so
+// 'regular' is the lightest weight actually available; these guards catch a
+// regression back to 'semibold' via measured stroke weight (fillRatio: ink
+// pixels / the text's own bounding-box area — a bolder weight has thicker
+// strokes and less interior negative space, so it fills more of its own
+// bbox at the same size/tracking). Thresholds are set from the actual
+// regular-vs-semibold values measured through this exact pipeline: ALI
+// HAMED reads ~0.214 (regular) vs ~0.305 (semibold); SOFTWARE ENGINEER
+// reads ~0.246 (regular) vs ~0.325 (semibold) — each threshold sits at the
+// midpoint, comfortably clear of both.
+
+test('ALI HAMED renders in a light weight (fillRatio below the semibold/regular midpoint), not the previous blunt semibold', async () => {
+  const assets = await renderPassAssets(validConfig());
+  const strip = sharp(assets.get('strip@3x.png'));
+  const { width, height } = await strip.metadata();
+  // Same band as "ALI HAMED is centered horizontally in the strip" above,
+  // narrowed to a centred column so no stray circuit ink near the strip's
+  // edges can pollute the fillRatio measurement.
+  const rowTop = Math.round(height * 0.47);
+  const rowHeight = Math.round(height * 0.22);
+  const colLeft = Math.round(width * 0.25);
+  const colWidth = Math.round(width * 0.5);
+  const rowBuffer = await strip
+    .extract({ left: colLeft, top: rowTop, width: colWidth, height: rowHeight })
+    .png().toBuffer();
+
+  const isWhiteInk = (r, g, b, a) => a > 40 && r > 200 && g > 200 && b > 200;
+  const nameInk = await inkBBox(rowBuffer, isWhiteInk);
+  assert.ok(nameInk.width > 0 && nameInk.height > 0, 'expected white ALI HAMED ink in this row');
+  assert.ok(
+    nameInk.fillRatio < 0.26,
+    `ALI HAMED fillRatio ${nameInk.fillRatio.toFixed(3)} reads too heavy for a light weight ` +
+    '(regular measures ~0.214, semibold ~0.305 through this same pipeline)'
+  );
+});
+
+test('SOFTWARE ENGINEER renders in a light weight, quieter than the name — not the previous blunt semibold banner', async () => {
+  const assets = await renderPassAssets(validConfig());
+  const strip = sharp(assets.get('strip@3x.png'));
+  const { width, height } = await strip.metadata();
+  // Same band as "SOFTWARE ENGINEER is baked into the strip..." above,
+  // narrowed to a centred column for the same reason as the name test.
+  const rowTop = Math.round(height * 0.68);
+  const rowHeight = Math.round(height * 0.11);
+  const colLeft = Math.round(width * 0.25);
+  const colWidth = Math.round(width * 0.5);
+  const rowBuffer = await strip
+    .extract({ left: colLeft, top: rowTop, width: colWidth, height: rowHeight })
+    .png().toBuffer();
+
+  const role2Ink = await inkBBox(rowBuffer, isCompositedLogoInk);
+  assert.ok(role2Ink.width > 0 && role2Ink.height > 0, 'expected blue SOFTWARE ENGINEER ink in this row');
+  assert.ok(
+    role2Ink.fillRatio < 0.29,
+    `SOFTWARE ENGINEER fillRatio ${role2Ink.fillRatio.toFixed(3)} reads too heavy for a light weight ` +
+    '(regular measures ~0.246, semibold ~0.325 through this same pipeline)'
+  );
+});
+
+// ---- Refinement pass: the circuit's unlit traces recede (dark, quiet)
+// rather than reading as light-grey noise competing with the type — see
+// STRIP_TRACE_BASE_COLOR/STRIP_TRACE_BASE_OPACITY in src/lib/pass.mjs.
+test('unlit circuit traces are dark and recede, not a light grey that competes with the type', async () => {
+  const assets = await renderPassAssets(validConfig());
+  const strip = sharp(assets.get('strip@3x.png'));
+  const { width, height } = await strip.metadata();
+  // A corner comfortably inside the circuit field but clear of the centred
+  // identity block and (per circuit.mjs's own accentColor draws) mostly
+  // unlit trace, not blue.
+  const cropBuffer = await strip
+    .extract({ left: 0, top: 0, width: Math.round(width * 0.22), height: Math.round(height * 0.4) })
+    .raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = cropBuffer;
+  let unlitCount = 0, unlitSum = 0;
+  for (let i = 0; i < data.length; i += info.channels) {
+    const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+    // Unlit trace grey: r≈g≈b (low colour saturation), distinctly above pure
+    // black but not the bright accent blue (b >> r for lit traces/nodes).
+    const isGreyish = Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && Math.abs(r - b) < 12;
+    const isNotBlack = r > 4 || g > 4 || b > 4;
+    if (isGreyish && isNotBlack) {
+      unlitCount++;
+      unlitSum += (r + g + b) / 3;
+    }
+  }
+  assert.ok(unlitCount > 0, 'expected some unlit grey circuit-trace ink in this corner crop');
+  const avgLuminance = unlitSum / unlitCount;
+  // circuit.mjs's page-tuned default (#4B5563 at opacity 0.7 over black)
+  // averages well above 60; the strip's darker/quieter override
+  // (#2A3038 at opacity 0.4) should read distinctly lower.
+  assert.ok(
+    avgLuminance < 45,
+    `unlit circuit trace average luminance ${avgLuminance.toFixed(1)} is too bright to read as ` +
+    'receding — expected a dark, quiet grey (see STRIP_TRACE_BASE_COLOR/STRIP_TRACE_BASE_OPACITY)'
+  );
+});
+
+// ---- Refinement pass: wider tracking on ALI HAMED must not silently clip.
+// Widening STRIP_NAME_TRACKING_RATIO increases the name's measured advance;
+// the strip's existing height guard (see the PassError test above the
+// overflow comment in renderStripMaster) only checks the vertical axis, so
+// this proves the width axis is guarded too, and that the guard actually
+// fires rather than letting composite() silently clip a too-wide name.
+test('a sufficiently long name overflows the strip width and throws PassError rather than silently clipping', async () => {
+  const c = validConfig();
+  c.content.name = 'ALEXANDER MAXIMILIAN HAMED-THE-THIRD-OF-RIYADH';
+  await assert.rejects(() => renderPassAssets(c), PassError);
+  await assert.rejects(() => renderPassAssets(c), /overflows the fixed strip width/);
+});
+
+// ---- Refinement pass: the reference's own name width, at production
+// tracking/weight, must still comfortably fit — this is the "did not
+// overreach" counterpart to the overflow test above.
+test('ALI HAMED at the actual production weight/tracking fits well inside the strip width, with no clipping', async () => {
+  const assets = await renderPassAssets(validConfig());
+  const strip = sharp(assets.get('strip@3x.png'));
+  const { width, height } = await strip.metadata();
+  const rowTop = Math.round(height * 0.47);
+  const rowHeight = Math.round(height * 0.22);
+  const rowBuffer = await strip
+    .extract({ left: 0, top: rowTop, width, height: rowHeight })
+    .png().toBuffer();
+  const isWhiteInk = (r, g, b, a) => a > 40 && r > 200 && g > 200 && b > 200;
+  const nameInk = await inkBBox(rowBuffer, isWhiteInk);
+  assert.ok(nameInk.width > 0, 'expected white ALI HAMED ink in this row');
+  assert.ok(nameInk.minX > 0 && nameInk.maxX < width, 'ALI HAMED ink must not touch the strip edges (clipped)');
+  assert.ok(nameInk.width < width * 0.85, `ALI HAMED width ${nameInk.width} should sit well inside the ${width}pt strip`);
 });
