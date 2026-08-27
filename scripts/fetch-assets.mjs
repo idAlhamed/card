@@ -36,7 +36,7 @@ async function fetchInter() {
   // space, and .pathname would percent-encode it to %20 before it reaches unzip.
   try {
     await run('unzip', ['-o', '-j', fileURLToPath(zipPath),
-      '*Inter-Regular.ttf', '*Inter-SemiBold.ttf', '*OFL.txt', '*LICENSE.txt',
+      '*Inter-Regular.ttf', '*Inter-SemiBold.ttf', '*Inter-Light.ttf', '*OFL.txt', '*LICENSE.txt',
       '-d', fileURLToPath(fontDir)]);
   } catch (err) {
     // unzip exits 11 when one of several glob patterns matches nothing, even
@@ -52,7 +52,7 @@ async function fetchInter() {
   // Inter-Regular.ttf or Inter-SemiBold.ttf, that too would exit 11 and get
   // swallowed above. So verify the fonts actually exist before declaring
   // success — never proceed with a missing font.
-  for (const f of ['Inter-Regular.ttf', 'Inter-SemiBold.ttf']) {
+  for (const f of ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'Inter-Light.ttf']) {
     try {
       await access(new URL(f, fontDir));
     } catch {
@@ -72,7 +72,7 @@ async function fetchInter() {
     const alt = await readFile(new URL('LICENSE.txt', fontDir), 'utf8');
     await writeFile(new URL('OFL.txt', fontDir), alt);
   }
-  console.log('  vendor/fonts/Inter-{Regular,SemiBold}.ttf');
+  console.log('  vendor/fonts/Inter-{Regular,SemiBold,Light}.ttf');
 }
 
 async function fetchIcons() {
@@ -114,7 +114,7 @@ try {
   console.error(`\nVendoring failed: ${err.message}`);
   console.error('\nManual fallback:');
   console.error(`  1. Download ${INTER_ZIP}`);
-  console.error('     Extract Inter-Regular.ttf and Inter-SemiBold.ttf into vendor/fonts/');
+  console.error('     Extract Inter-Regular.ttf, Inter-SemiBold.ttf and Inter-Light.ttf into vendor/fonts/');
   console.error('     Copy the OFL licence to vendor/fonts/OFL.txt');
   console.error(`  2. Save each of these into vendor/icons/<name>.svg:`);
   for (const n of ICONS) {

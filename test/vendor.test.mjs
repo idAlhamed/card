@@ -5,7 +5,7 @@ import { access, readFile } from 'node:fs/promises';
 const root = new URL('../', import.meta.url);
 
 test('Inter TTFs are vendored', async () => {
-  for (const f of ['Inter-Regular.ttf', 'Inter-SemiBold.ttf']) {
+  for (const f of ['Inter-Regular.ttf', 'Inter-SemiBold.ttf', 'Inter-Light.ttf']) {
     await assert.doesNotReject(access(new URL(`vendor/fonts/${f}`, root)),
       `missing vendor/fonts/${f} — run: npm run fetch:assets`);
   }

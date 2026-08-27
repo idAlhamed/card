@@ -335,6 +335,27 @@ const STRIP_TRACE_BASE_OPACITY = 0.4;
 // render time rather than estimated.
 const STRIP_CLEAR_MARGIN = 20;
 
+// circuit.mjs's page-tuned lit-node defaults (radius up to 2.25x baseNodeR,
+// glow up to 2.4x that again) size a glowing terminal node against a
+// canvas hundreds of points tall — plenty of room for a node to read as a
+// deliberate "glowing point" rather than dominate its surroundings. On the
+// strip's cramped 123pt height, the same worst-case node/glow combination
+// (observed at ~5pt node / ~12pt glow radius, against a 123pt-tall strip)
+// reads as an oversized blob, not a point — nothing in
+// preview/Ali-Hamed-Apple-Wallet-Pass-Updated.png comes close to that size;
+// its lit points are many small, evenly scattered dots at a consistent,
+// modest radius. maxNodeRadius caps the node itself; a lower
+// glowRadiusMultiplier keeps its halo proportionate rather than ballooning
+// back out around a now-smaller dot. A higher accentProbability than
+// circuit.mjs's page-tuned default compensates for the strip's low total
+// trace count (this field only has room for ~35 traces total vs hundreds
+// on the page) — without it, so few traces would end up lit that the
+// reference's "scattered field of small lit points on both edges" would
+// read as two or three isolated dots instead.
+const STRIP_MAX_NODE_R = 2.6;
+const STRIP_GLOW_RADIUS_MULTIPLIER = 1.6;
+const STRIP_ACCENT_PROBABILITY = 0.28;
+
 /**
  * Renders `text` as a single rasterised line at this master's pixel scale,
  * returning both the PNG buffer and its exact pixel width/height so the
@@ -367,21 +388,21 @@ async function renderStripMaster(config) {
   const pt = (v) => Math.round(v * scale); // logical points -> this render's pixels
 
   // ---- Measure/render every text line up front, at this master's scale --
-  // 'regular' is the lightest Inter weight actually vendored (see
-  // vendor/fonts/ — only Regular and SemiBold ship; there is no Light in
-  // this repo and none may be added). The reference's ALI HAMED reads as a
-  // true light weight; regular is the closest this build can get, paired
-  // with substantially wider tracking (STRIP_NAME_TRACKING_RATIO) to carry
-  // the rest of that "light and airy" impression semibold could not.
+  // 'light' (Inter-Light, vendored alongside Regular/SemiBold — see
+  // vendor/fonts/ and scripts/fetch-assets.mjs) is used for both ALI HAMED
+  // and SOFTWARE ENGINEER: the reference reads both as a true light weight,
+  // and now that Light is genuinely vendored (not substituted with
+  // Regular), this is the actual stroke weight, not an approximation
+  // carried entirely by tracking.
   const name = await renderStripLine(content.name, {
-    weight: 'regular', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
+    weight: 'light', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
     trackingRatio: STRIP_NAME_TRACKING_RATIO,
   });
   // Same reasoning as ALI HAMED above: the reference sets SOFTWARE ENGINEER
-  // noticeably lighter than the previous semibold rendering, wide-tracked
-  // under the name, not as a bold banner in its own right.
+  // in a genuinely light weight, wide-tracked under the name, not as a bold
+  // banner in its own right.
   const role2 = await renderStripLine(content.roleSecondary, {
-    weight: 'regular', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
+    weight: 'light', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
   });
   // walletRoleCase upper-cases while preserving "iOS"'s lowercase "i" (see
   // its own doc-comment above) — reused here, not duplicated, so the
@@ -487,6 +508,13 @@ async function renderStripMaster(config) {
     // motif recedes behind the identity block instead of competing with it.
     baseColor: STRIP_TRACE_BASE_COLOR,
     baseOpacity: STRIP_TRACE_BASE_OPACITY,
+    // See STRIP_MAX_NODE_R/STRIP_GLOW_RADIUS_MULTIPLIER/STRIP_ACCENT_PROBABILITY
+    // above: caps lit nodes to a small, consistent dot (not a blob) and
+    // spreads more of them across both edges, matching the reference's
+    // evenly scattered field of small lit points.
+    maxNodeRadius: STRIP_MAX_NODE_R,
+    glowRadiusMultiplier: STRIP_GLOW_RADIUS_MULTIPLIER,
+    accentProbability: STRIP_ACCENT_PROBABILITY,
   });
   const circuitPng = await sharp(Buffer.from(circuitSvgString), { density: dpi })
     .png().toBuffer();

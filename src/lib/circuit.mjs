@@ -211,6 +211,16 @@ function buildEdgeField(rand, { width, height, gridStep, density, maxReach }) {
  *                                         hollow accent-coloured nodes — lets a
  *                                         caller make the accent read quieter
  *                                         without changing its hue.
+ * @param {number} [opts.maxNodeRadius=Infinity] Hard cap, in local units, on
+ *                                         any terminal node's own radius
+ *                                         (hollow or lit) before glow is
+ *                                         applied — lets a caller keep a
+ *                                         cramped composition from producing
+ *                                         an outsized node that reads as a
+ *                                         blob rather than a dot. Ignored
+ *                                         (no cap) by default, so the
+ *                                         page-tuned default radius spread
+ *                                         is unaffected.
  * @returns {string} A complete `<svg>…</svg>` document.
  */
 export function circuitSVG(opts = {}) {
@@ -231,6 +241,7 @@ export function circuitSVG(opts = {}) {
     glowOpacity = 0.22,
     glowRadiusMultiplier = 2.4,
     accentStrokeOpacity = 1,
+    maxNodeRadius = Infinity,
   } = opts;
 
   if (!(width > 0)) throw new RangeError(`circuitSVG: width must be > 0, got ${width}`);
@@ -243,9 +254,11 @@ export function circuitSVG(opts = {}) {
   // Node radii are drawn from baseNodeR * (0.65 + rand()*1.6), so 2.25x
   // baseNodeR is the true worst case — computed up front (it only depends
   // on strokeWidth) so contentClearX can reserve room for the largest
-  // possible glow before any trace is generated.
+  // possible glow before any trace is generated. maxNodeRadius (when a
+  // caller passes one) caps that worst case lower, same as it caps every
+  // individual node's own radius below.
   const baseNodeR = strokeWidth * 2.2;
-  const maxNodeR = baseNodeR * 2.25;
+  const maxNodeR = Math.min(baseNodeR * 2.25, maxNodeRadius);
 
   let maxReach;
   if (contentClearX) {
@@ -284,7 +297,7 @@ export function circuitSVG(opts = {}) {
   for (const pts of allTraces) {
     const isLit = rand() < accentProbability;
     lit.push(isLit);
-    const r = baseNodeR * (0.65 + rand() * 1.6);
+    const r = Math.min(baseNodeR * (0.65 + rand() * 1.6), maxNodeRadius);
     const terminal = pts[pts.length - 1];
     if (isLit) {
       nodes.push({ x: terminal.x, y: terminal.y, r, kind: 'lit' });

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const FONTS = {
+  light: new URL('../../vendor/fonts/Inter-Light.ttf', import.meta.url),
   regular: new URL('../../vendor/fonts/Inter-Regular.ttf', import.meta.url),
   semibold: new URL('../../vendor/fonts/Inter-SemiBold.ttf', import.meta.url),
 };

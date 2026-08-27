@@ -427,18 +427,24 @@ test('ALI HAMED is centered horizontally in the strip', async () => {
 // ---- Refinement pass: ALI HAMED / SOFTWARE ENGINEER read as light and
 // wide-tracked, matching preview/Ali-Hamed-Apple-Wallet-Pass-Updated.png,
 // not the blunt/generic semibold banner look the previous pass produced.
-// vendor/fonts/ ships only Inter-Regular and Inter-SemiBold — no Light — so
-// 'regular' is the lightest weight actually available; these guards catch a
-// regression back to 'semibold' via measured stroke weight (fillRatio: ink
-// pixels / the text's own bounding-box area — a bolder weight has thicker
-// strokes and less interior negative space, so it fills more of its own
-// bbox at the same size/tracking). Thresholds are set from the actual
-// regular-vs-semibold values measured through this exact pipeline: ALI
-// HAMED reads ~0.214 (regular) vs ~0.305 (semibold); SOFTWARE ENGINEER
-// reads ~0.246 (regular) vs ~0.325 (semibold) — each threshold sits at the
-// midpoint, comfortably clear of both.
+// vendor/fonts/ now ships Inter-Light alongside Regular and SemiBold (see
+// scripts/fetch-assets.mjs and src/lib/text-path.mjs's FONTS map), and both
+// lines render at the actual 'light' weight — not 'regular' standing in for
+// it. These guards catch a regression back to a heavier weight via measured
+// stroke weight (fillRatio: ink pixels / the text's own bounding-box area —
+// a bolder weight has thicker strokes and less interior negative space, so
+// it fills more of its own bbox at the same size/tracking). Thresholds are
+// set from the actual light/regular/semibold values measured through this
+// exact pipeline: ALI HAMED reads ~0.161 (light) vs ~0.214 (regular) vs
+// ~0.305 (semibold); SOFTWARE ENGINEER reads ~0.174 (light) vs ~0.246
+// (regular) vs ~0.325 (semibold) — each threshold sits at the light/regular
+// midpoint, so it catches a silent fallback to 'regular' (which would look
+// like success on every other test — same API, same glyphs, no thrown
+// error), not just a regression all the way back to 'semibold'. See also
+// test/text-path.test.mjs's direct proof that 'light' is a genuinely
+// distinct, separately-rasterised font, not an alias of 'regular'.
 
-test('ALI HAMED renders in a light weight (fillRatio below the semibold/regular midpoint), not the previous blunt semibold', async () => {
+test('ALI HAMED renders in a light weight (fillRatio below the light/regular midpoint), not a silent fallback to regular or semibold', async () => {
   const assets = await renderPassAssets(validConfig());
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
@@ -457,13 +463,13 @@ test('ALI HAMED renders in a light weight (fillRatio below the semibold/regular 
   const nameInk = await inkBBox(rowBuffer, isWhiteInk);
   assert.ok(nameInk.width > 0 && nameInk.height > 0, 'expected white ALI HAMED ink in this row');
   assert.ok(
-    nameInk.fillRatio < 0.26,
-    `ALI HAMED fillRatio ${nameInk.fillRatio.toFixed(3)} reads too heavy for a light weight ` +
-    '(regular measures ~0.214, semibold ~0.305 through this same pipeline)'
+    nameInk.fillRatio < 0.19,
+    `ALI HAMED fillRatio ${nameInk.fillRatio.toFixed(3)} reads too heavy for the light weight ` +
+    '(light measures ~0.161, regular ~0.214, semibold ~0.305 through this same pipeline)'
   );
 });
 
-test('SOFTWARE ENGINEER renders in a light weight, quieter than the name — not the previous blunt semibold banner', async () => {
+test('SOFTWARE ENGINEER renders in a light weight, quieter than the name — not a silent fallback to regular or semibold', async () => {
   const assets = await renderPassAssets(validConfig());
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
@@ -480,9 +486,9 @@ test('SOFTWARE ENGINEER renders in a light weight, quieter than the name — not
   const role2Ink = await inkBBox(rowBuffer, isCompositedLogoInk);
   assert.ok(role2Ink.width > 0 && role2Ink.height > 0, 'expected blue SOFTWARE ENGINEER ink in this row');
   assert.ok(
-    role2Ink.fillRatio < 0.29,
-    `SOFTWARE ENGINEER fillRatio ${role2Ink.fillRatio.toFixed(3)} reads too heavy for a light weight ` +
-    '(regular measures ~0.246, semibold ~0.325 through this same pipeline)'
+    role2Ink.fillRatio < 0.21,
+    `SOFTWARE ENGINEER fillRatio ${role2Ink.fillRatio.toFixed(3)} reads too heavy for the light weight ` +
+    '(light measures ~0.174, regular ~0.246, semibold ~0.325 through this same pipeline)'
   );
 });
 
