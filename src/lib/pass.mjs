@@ -231,15 +231,39 @@ async function renderIcon(size) {
 // decorative front-of-pass identity block trades accessibility for the
 // requested visual treatment.
 //
-// PassKit strip sizes are 375x123 / 750x246 / 1125x369, a straight 1x/2x/3x
-// of one artwork (Apple's Wallet HIG). Rather than calling circuitSVG() at
+// PassKit's strip size is PER PASS STYLE, not one number for every pass.
+// Apple's Wallet Developer Guide ("Pass Design and Creation") allots, at 1x:
+//
+//     event tickets ......... 375x98
+//     coupons ............... 375x144
+//     store cards ........... 375x144   <-- this pass
+//     other pass styles ..... 375x123
+//
+// This file previously used 375x123 — the "other pass styles" row — for a
+// storeCard. That is the wrong row, and it was not a harmless mismatch:
+// Apple also documents that "images are scaled (preserving aspect ratio) to
+// fill this allotted space. Images with a different aspect ratio than their
+// allotted space are cropped after being scaled." At 375x123 (aspect 3.049)
+// inside a 375x144 slot (aspect 2.604), iOS scaled the artwork up by
+// x1.1707 to fill the height and then cropped 32pt off EACH SIDE — so the
+// circuit's outer edges never reached the screen, and every element was
+// silently magnified ~17%. That magnification is also why two rounds of
+// deliberate sizing changes looked identical on-device: the differences
+// were real in the file but flattened by the transform.
+//
+// At the documented 375x144 the aspect matches exactly, so iOS scales by
+// x1.0: no magnification, no cropping, and the artwork reaches the device
+// as designed.
+//
+// 375x144 / 750x288 / 1125x432 is a straight 1x/2x/3x of one artwork.
+// Rather than calling circuitSVG() at
 // three different nominal pixel sizes — which would reseed its PRNG
 // differently at each size and produce three visibly different patterns,
 // not a clean multiple of the same artwork — this renders ONE vector
-// composition at the logical 375x123 size and rasterises it at increasing
+// composition at the logical 375x144 size and rasterises it at increasing
 // density (SVG DPI) to get pixel-exact 2x/3x output, confirmed empirically:
 // sharp treats an unitless SVG width as px at a 72dpi baseline, so density
-// 72/144/216 yields exactly 375x123 / 750x246 / 1125x369. The full
+// 72/144/216 yields exactly 375x144 / 750x288 / 1125x432. The full
 // composite (circuit + logo + text + divider) is built once at the highest
 // density (@3x) and downscaled for @2x/@1x — the same "render large, then
 // downscale" principle already used for renderIcon above, just applied the
@@ -250,7 +274,7 @@ async function renderIcon(size) {
 // `density`, so their pixel output is exact at every density with no extra
 // resampling — see renderStripLine.
 const STRIP_W = 375;
-const STRIP_H = 123;
+const STRIP_H = 144;
 
 // Vertical layout of the strip's baked-in content, top to bottom, in
 // logical (1x) points. Font sizes look large on paper because wordmarkSVG
@@ -280,20 +304,40 @@ const STRIP_H = 123;
 // reference's *rhythm* (each notably smaller than the line above it, in
 // the same order) without matching its absolute proportions, which the
 // fixed 123pt budget cannot hold alongside a generous logo and name.
-const STRIP_PAD_TOP = 6;
-const STRIP_LOGO_H = 50;
-const STRIP_GAP_LOGO_NAME = 6;
+// Second client round: a bit more breathing room between ALI HAMED /
+// SOFTWARE ENGINEER / iOS DEVELOPER, and a bit more logo presence — same
+// hierarchy, same order, not a layout change. The 123pt budget had only
+// ~2.2pt spare (see the arithmetic in this file's own tests/commit
+// history), nowhere near the ~10pt the two increases below cost together,
+// so the difference is recovered from STRIP_PAD_TOP/STRIP_PAD_BOTTOM (the
+// strip's own edges already sit against black — nobody asked for more
+// margin there) and STRIP_GAP_ROLE_DIVIDER (not one of the three lines the
+// client named, and the divider reads fine sitting close beneath iOS
+// DEVELOPER). STRIP_GAP_LOGO_NAME is left untouched: cutting it further
+// would crowd the name against the logo, which is the opposite of what was
+// asked for.
+const STRIP_PAD_TOP = 5;
+// The 375x144 storeCard canvas (see STRIP_H) freed 21pt that the old,
+// incorrect 123pt canvas never had. Rather than letterbox the old block
+// into a taller frame, that space is spent where it was asked for: the
+// logo grows 55 -> 68pt (and 50 -> 68, +36%, against the layout that
+// shipped before any of this), and the two gaps between the three
+// identity lines widen well beyond what the 123pt budget could hold.
+// Everything else — font sizes, weights, tracking, colours, the divider,
+// the circuit treatment — is untouched.
+const STRIP_LOGO_H = 68;
+const STRIP_GAP_LOGO_NAME = 5;
 const STRIP_NAME_FONT_SIZE = 26;
-const STRIP_GAP_NAME_ROLE2 = 4;
+const STRIP_GAP_NAME_ROLE2 = 8;
 const STRIP_ROLE2_FONT_SIZE = 14;
-const STRIP_GAP_ROLE2_ROLE = 4;
+const STRIP_GAP_ROLE2_ROLE = 7;
 const STRIP_ROLE_FONT_SIZE = 11;
-const STRIP_GAP_ROLE_DIVIDER = 5;
+const STRIP_GAP_ROLE_DIVIDER = 6;
 // Reference ratio (divider width : card width) scaled onto STRIP_W is
 // ~26pt; 32pt sits close to that while staying legible at @1x.
 const STRIP_DIVIDER_W = 32;
 const STRIP_DIVIDER_H = 2;
-const STRIP_PAD_BOTTOM = 6;
+const STRIP_PAD_BOTTOM = 4;
 // Letter-spacing-to-font-size ratio shared by SOFTWARE ENGINEER and iOS
 // DEVELOPER, matching the tracked-caps look already used for the primary
 // field in scripts/make-preview.mjs.
