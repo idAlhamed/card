@@ -74,19 +74,18 @@ async function main() {
 
   // Prefer the real @2x assets (already sized for this canvas's 2x scale);
   // fall back to downscaling the @3x asset if @2x is ever missing.
-  const [logoBuffer, stripBuffer] = await Promise.all([
-    loadPassImage('logo@2x.png', 'logo@3x.png', [320, 100, { fit: 'inside' }]),
-    loadPassImage('strip@2x.png', 'strip@3x.png', [750, 246, { fit: 'inside' }]),
-  ]);
+  const stripBuffer = await loadPassImage(
+    'strip@2x.png', 'strip@3x.png', [750, 246, { fit: 'inside' }]);
 
-  const logoMeta = await sharp(logoBuffer).metadata();
-  const logoHeight = 44;
-  const logoWidth = Math.round((logoMeta.width / logoMeta.height) * logoHeight);
-  const logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+  // The pass carries no logo.png — the Apple mark and the "Business Card"
+  // title were removed at the client's request, leaving the supplied AH logo
+  // (inside strip.png) as the only identity mark. PassKit simply leaves the
+  // top-left slot empty, so the strip starts at the top padding.
+  const logoHeight = 0;
 
   const stripMeta = await sharp(stripBuffer).metadata();
   const stripDataUri = `data:image/png;base64,${stripBuffer.toString('base64')}`;
-  const stripTop = PAD + logoHeight + 16;
+  const stripTop = PAD;
   const stripBottom = stripTop + stripMeta.height;
 
   // primaryFields (name): overlaid on the strip's bottom-left, inside the
@@ -156,8 +155,6 @@ async function main() {
       <rect width="${CARD_W}" height="${CARD_H}" rx="${RADIUS}" ry="${RADIUS}"
             fill="${pass.backgroundColor}" />
       <g clip-path="url(#cardClip)">
-        <image x="${PAD}" y="${PAD}" width="${logoWidth}" height="${logoHeight}"
-               href="${logoDataUri}" />
         <image x="0" y="${stripTop}" width="${stripMeta.width}" height="${stripMeta.height}"
                href="${stripDataUri}" />
         ${primaryPlaced.markup}

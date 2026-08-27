@@ -173,7 +173,7 @@ export function buildPassJSON(config) {
 }
 
 // Render large, then downscale: rasterising an SVG at its final small size
-// produces soft edges on small text (used below by renderLogoTitle).
+// produces soft edges on small text.
 const RENDER_SIZE = 240;
 
 // icon.png is the client-supplied AH logo, not a derived text monogram — a
@@ -297,132 +297,22 @@ async function renderStripAssets() {
   return { x1, x2, x3: master };
 }
 
-// logo.png is now the pass TITLE, not the name: a small Apple mark followed
-// by "Business Card", in labelColor, so the pass reads as a quiet category
-// label when stacked among other passes in Wallet — that's what identifies
-// it by type. The name itself moved to primaryFields (see buildPassJSON),
-// where Wallet renders it far larger than the 18.8pt the 160x50pt logo slot
-// ever allowed at 0.08em tracking.
-//
+// The pass carries NO logo.png. The client asked for the Apple mark and the
+// "Business Card" title to be removed entirely, with the supplied AH logo as
+// the only identity mark — it lives in strip.png, which is the visual focus.
+// logo.png is optional in PassKit (only icon.png is required), so the slot is
+// simply left empty rather than filled with a substitute label.
+
 // rgb(134, 134, 139) as a hex literal, so this file doesn't need to import
 // or duplicate the rgb() string used for pass.json's labelColor.
 const LABEL_COLOR = '#86868B';
 
-const LOGO_TITLE = 'Business Card';
-
-// 0.12em, matching the tracking used for other small-caps label text in
-// this system (e.g. a "TECHNOLOGIES" caption) — tight enough to read as a
-// caption, not a wordmark competing with the name.
-const LOGO_TITLE_TRACKING = 0.06;
-
-// The Apple mark + "Business Card" together sit at roughly this cap height
-// inside the 50pt-tall logo slot (~11pt of 50pt): within the client's
-// requested "10-12pt" range, small and quiet enough not to compete with
-// the primaryField name.
-const LOGO_CAP_HEIGHT_RATIO = 13.5 / 50;
-// Gap between the Apple mark and "Business Card", as a fraction of the
-// 160pt-wide slot.
-const LOGO_GAP_RATIO = 6 / 160;
-
-// U+F8FF PRIVATE USE ONE, the Apple logo glyph. Written as an escape, not a
-// literal character, so the source file can't have this glyph silently
-// mangled or dropped by an editor, terminal, or git filter that doesn't
-// round-trip Private Use Area code points reliably.
-const APPLE_LOGO_GLYPH = '\uF8FF';
-
-// Renders the real Apple mark via the macOS system "Apple Symbols" font,
-// which contains U+F8FF. Inter — the only font vendored into this repo —
-// does not contain this glyph (verified: glyph index 0), and there is no
-// legitimate alternative: hand-drawing an apple shape would redraw Apple's
-// trademark from scratch, and vendoring an Apple-supplied logo image into
-// the repo would redistribute it. Rendering the real glyph from the
-// operating system's own font at build time, on the client's own Mac, is
-// the defensible path — but it means logo.png depends on a font that only
-// ships with macOS, so the asset is not guaranteed byte-reproducible on a
-// machine without it.
-//
-// If "Apple Symbols" is missing, SVG text rendering doesn't throw — it
-// silently falls back to a missing-glyph box or empty output. So this
-// renders a probe glyph first and measures its ink coverage: a real Apple
-// mark covers a substantial fraction of its probe canvas; a fallback covers
-// close to none. Below that threshold this throws loudly rather than
-// shipping a broken pass title.
-async function renderAppleMark(targetHeight) {
-  const probeSize = 200;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${probeSize}" height="${probeSize}">` +
-    `<text x="0" y="${Math.round(probeSize * 0.82)}" font-family="Apple Symbols" ` +
-    `font-size="${probeSize}" fill="${LABEL_COLOR}">${APPLE_LOGO_GLYPH}</text></svg>`;
-  const rendered = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer();
-
-  const { data, info } = await sharp(rendered).raw().toBuffer({ resolveWithObject: true });
-  let opaquePixels = 0;
-  for (let i = 3; i < data.length; i += info.channels) {
-    if (data[i] > 16) opaquePixels++;
-  }
-  const coverage = opaquePixels / (info.width * info.height);
-  if (coverage < 0.03) {
-    throw new Error(
-      'Rendering the Apple logo glyph (U+F8FF) produced almost no visible ' +
-      'pixels. "Apple Symbols" is likely unavailable on this machine, so ' +
-      'the renderer fell back to a missing-glyph box instead of the real ' +
-      'mark. wallet/AliHamed.pass/logo.png cannot be built without it — ' +
-      'this build must run on a Mac with the system font installed.'
-    );
-  }
-
-  return sharp(rendered).trim().resize({ height: targetHeight }).png().toBuffer();
-}
-
-async function renderLogoTitle(targetHeight) {
-  const svg = await wordmarkSVG(LOGO_TITLE, {
-    fontSize: RENDER_SIZE, letterSpacing: RENDER_SIZE * LOGO_TITLE_TRACKING, fill: LABEL_COLOR,
-  });
-  return sharp(Buffer.from(svg)).resize({ height: targetHeight }).png().toBuffer();
-}
-
-// Transparent background: Wallet composites the logo onto backgroundColor.
-// The mark and title are rendered at a matched cap height, left-aligned
-// flush to the slot's left edge, and vertically centred as a pair — small
-// and quiet, so it reads as a title, not a second headline.
-async function renderLogo(width, height) {
-  const capHeight = Math.round(height * LOGO_CAP_HEIGHT_RATIO);
-  const gap = Math.round(width * LOGO_GAP_RATIO);
-
-  const [mark, title] = await Promise.all([
-    renderAppleMark(capHeight),
-    renderLogoTitle(capHeight),
-  ]);
-  const { width: markWidth } = await sharp(mark).metadata();
-  const top = Math.round((height - capHeight) / 2);
-
-  return sharp({
-    create: {
-      width, height, channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
-  })
-    .composite([
-      { input: mark, left: 0, top },
-      { input: title, left: markWidth + gap, top },
-    ])
-    .png().toBuffer();
-}
-
-// Every image this renders is now fixed, client-supplied artwork (the AH
-// logo) or a fixed composition built from it — none of it varies with
-// config.content.name any more (icon.png used to; see renderIcon above).
-// _config is accepted-but-unused so build.mjs's call site (which still has
-// a config to pass) doesn't need to change, matching the same convention
-// already used by site.mjs's renderTouchIcon.
 export async function renderPassAssets(_config) {
   const strips = await renderStripAssets();
   return new Map([
     ['icon.png', await renderIcon(29)],
     ['icon@2x.png', await renderIcon(58)],
     ['icon@3x.png', await renderIcon(87)],
-    ['logo.png', await renderLogo(160, 50)],
-    ['logo@2x.png', await renderLogo(320, 100)],
-    ['logo@3x.png', await renderLogo(480, 150)],
     ['strip.png', strips.x1],
     ['strip@2x.png', strips.x2],
     ['strip@3x.png', strips.x3],

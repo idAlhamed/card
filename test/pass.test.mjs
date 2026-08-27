@@ -210,11 +210,13 @@ test('the LinkedIn and GitHub back-field labels are derived from config, not har
   assert.doesNotMatch(github.attributedValue, /idAlhamed/);
 });
 
-test('renders all nine required assets at exact sizes', async () => {
+test('renders all six required assets at exact sizes', async () => {
   const assets = await renderPassAssets(validConfig());
+  // No logo.png: the client asked for the Apple mark and the "Business Card"
+  // title to be removed entirely. logo.png is optional in PassKit (only
+  // icon.png is required), so the slot is left empty rather than substituted.
   const expected = {
     'icon.png': [29, 29], 'icon@2x.png': [58, 58], 'icon@3x.png': [87, 87],
-    'logo.png': [160, 50], 'logo@2x.png': [320, 100], 'logo@3x.png': [480, 150],
     'strip.png': [375, 123], 'strip@2x.png': [750, 246], 'strip@3x.png': [1125, 369],
   };
   assert.deepEqual([...assets.keys()].sort(), Object.keys(expected).sort());
@@ -228,7 +230,7 @@ test('renders all nine required assets at exact sizes', async () => {
 
 test('icon.png is the supplied AH logo artwork, fixed regardless of config.content.name', async () => {
   // A generated text monogram was rejected by the client; icon.png must now
-  // be the same fixed artwork as logo.png and strip.png, not something that
+  // be the same fixed supplied artwork as strip.png, not something that
   // silently redraws itself per name (the old text-monogram behaviour).
   const ali = validConfig();
   const jane = validConfig();
@@ -247,17 +249,20 @@ test('icon.png is the supplied AH logo artwork, fixed regardless of config.conte
   }
 });
 
-test('logo.png remains the fixed Apple-mark + Business Card title, unaffected by the name', async () => {
-  const ali = validConfig();
-  const jane = validConfig();
-  jane.content.name = 'Jane Doe';
+// The client asked for the Apple mark and the "Business Card" title to be
+// removed from the pass entirely, with the supplied AH logo as the only
+// identity mark. Both lived exclusively in logo.png, so no logo asset may
+// come back — and nothing decorative may be substituted for it.
+test('the pass emits no logo asset at all', async () => {
+  const assets = await renderPassAssets(validConfig());
+  for (const name of ['logo.png', 'logo@2x.png', 'logo@3x.png']) {
+    assert.equal(assets.get(name), undefined, `${name} must not be emitted`);
+  }
+});
 
-  const [aliAssets, janeAssets] = await Promise.all([
-    renderPassAssets(ali),
-    renderPassAssets(jane),
-  ]);
-
-  assert.ok(aliAssets.get('logo.png').equals(janeAssets.get('logo.png')));
+test('pass.json carries no logoText', () => {
+  const p = buildPassJSON(validConfig());
+  assert.equal(p.logoText, undefined, 'no substitute title may appear');
 });
 
 test('strip.png is fixed artwork (circuit + AH logo), unaffected by the name', async () => {
