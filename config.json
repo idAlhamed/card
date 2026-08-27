@@ -18,19 +18,46 @@
     "message": "Building mobile products with a focus on performance & user experience.",
     "cta": "Got a product to build? Let's make it happen.",
     "footer": "© 2026 Ali Hamed",
-    "taglineWallet": "Building mobile products, end to end.",
+    "taglineWallet": "Building mobile products from idea to launch.",
     "taglinePage": "I turn ideas into high-quality mobile products people love.",
     "taglineCardFront": "BUILDING MOBILE PRODUCTS FROM IDEA TO LAUNCH",
     "expertise": [
-      { "icon": "smartphone", "label": "iOS Development" },
-      { "icon": "layers", "label": "App Architecture" },
-      { "icon": "gauge", "label": "Performance Optimization" },
-      { "icon": "app-window", "label": "UI/UX Implementation" },
-      { "icon": "cloud-upload", "label": "APIs & Integrations" },
-      { "icon": "lightbulb", "label": "Problem Solving" },
-      { "icon": "code-xml", "label": "Clean Code" },
-      { "icon": "shield-check", "label": "Testing" },
-      { "icon": "users", "label": "Agile & Collaboration" }
+      {
+        "icon": "smartphone",
+        "label": "iOS Development"
+      },
+      {
+        "icon": "layers",
+        "label": "App Architecture"
+      },
+      {
+        "icon": "gauge",
+        "label": "Performance Optimization"
+      },
+      {
+        "icon": "app-window",
+        "label": "UI/UX Implementation"
+      },
+      {
+        "icon": "cloud-upload",
+        "label": "APIs & Integrations"
+      },
+      {
+        "icon": "lightbulb",
+        "label": "Problem Solving"
+      },
+      {
+        "icon": "code-xml",
+        "label": "Clean Code"
+      },
+      {
+        "icon": "shield-check",
+        "label": "Testing"
+      },
+      {
+        "icon": "users",
+        "label": "Agile & Collaboration"
+      }
     ]
   },
   "contacts": {
