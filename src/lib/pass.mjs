@@ -118,13 +118,19 @@ export function buildPassJSON(config) {
       // upper-cased (preserving the "iOS" brand casing) to match how this
       // exact string already appears, hardcoded, in src/index.html's
       // role-secondary paragraph — see walletRoleCase below.
+      // Wallet renders a field's LABEL small and grey above its VALUE. In the
+      // approved reference SOFTWARE ENGINEER is the prominent line and
+      // iOS DEVELOPER is secondary — so SOFTWARE ENGINEER must be a VALUE.
+      // Putting it in a label (as before) inverted that hierarchy and also
+      // read semantically as "a label for iOS Developer", which it is not.
       secondaryFields: [
-        { key: 'role', label: content.roleSecondary, value: walletRoleCase(content.role) },
+        { key: 'role2', label: '', value: content.roleSecondary },
       ],
-      // The tagline gets its own row beneath that, so it reads as its own
-      // line rather than crowding the role pair.
+      // iOS DEVELOPER rides as the label above the tagline. That keeps the
+      // reference's vertical order — name, SOFTWARE ENGINEER, iOS DEVELOPER,
+      // tagline — while giving each line the right visual weight.
       auxiliaryFields: [
-        { key: 'tagline', label: '', value: content.taglineWallet },
+        { key: 'tagline', label: walletRoleCase(content.role), value: content.taglineWallet },
       ],
       backFields: [
         { key: 'message', label: '', value: content.message },

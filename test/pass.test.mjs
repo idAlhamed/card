@@ -98,22 +98,32 @@ test('the primary field is the name, overlaid on the strip', () => {
   assert.equal(p.storeCard.primaryFields[0].value, c.content.name);
 });
 
-test('the role pair is a single secondary field: roleSecondary as the label, role as the value', () => {
+// Wallet renders a field LABEL small and grey above its VALUE. The approved
+// reference makes SOFTWARE ENGINEER the prominent line and iOS DEVELOPER the
+// secondary one, so SOFTWARE ENGINEER must be a VALUE. Carrying it as a label
+// (as an earlier revision did) inverted that hierarchy.
+test('SOFTWARE ENGINEER is a field VALUE, so it is not demoted to label weight', () => {
   const c = validConfig();
   const p = buildPassJSON(c);
   const field = p.storeCard.secondaryFields[0];
-  assert.equal(field.label, c.content.roleSecondary);
-  // Upper-cased but the "iOS" brand casing is preserved — matches the
-  // literal text already hardcoded in src/index.html's role-secondary
-  // paragraph, so the wallet pass and the page read identically.
-  assert.equal(field.value, 'iOS DEVELOPER');
+  assert.equal(field.value, c.content.roleSecondary);
+  assert.equal(field.label, '', 'it must not ride as a label');
 });
 
-test('the role value upper-cases every source casing the same way', () => {
+test('iOS DEVELOPER is the label above the tagline, preserving the reference order', () => {
+  const c = validConfig();
+  const p = buildPassJSON(c);
+  const aux = p.storeCard.auxiliaryFields[0];
+  // Upper-cased, but the "iOS" brand casing is preserved so the pass and the
+  // page read identically.
+  assert.equal(aux.label, 'iOS DEVELOPER');
+});
+
+test('the role label upper-cases every source casing the same way', () => {
   const c = validConfig();
   c.content.role = 'ios developer';
   const p = buildPassJSON(c);
-  assert.equal(p.storeCard.secondaryFields[0].value, 'iOS DEVELOPER');
+  assert.equal(p.storeCard.auxiliaryFields[0].label, 'iOS DEVELOPER');
 });
 
 test('the tagline is its own auxiliary field', () => {

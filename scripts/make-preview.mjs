@@ -101,25 +101,39 @@ async function main() {
   const primaryY = stripBottom - primaryPlaced0.height - 18;
   const primaryPlaced = place(primarySVG, PAD, primaryY);
 
-  // secondaryFields row: field.label above field.value, stacked — how
-  // Wallet renders every field, front or back.
-  const roleLabelSVG = await wordmarkSVG(role.label, {
-    weight: 'regular', fontSize: 16, letterSpacing: 16 * 0.12, fill: pass.labelColor,
-  });
-  const roleValueSVG = await wordmarkSVG(role.value, {
-    weight: 'regular', fontSize: 26, fill: pass.foregroundColor,
-  });
-  const roleY = stripBottom + 34;
-  const roleLabelPlaced = place(roleLabelSVG, PAD, roleY);
-  const roleValueY = roleY + roleLabelPlaced.height + 10;
-  const roleValuePlaced = place(roleValueSVG, PAD, roleValueY);
+  // Wallet renders every field as LABEL (small, labelColor) above VALUE
+  // (larger, foregroundColor). Render both fields that way, and skip a label
+  // when it is empty — SOFTWARE ENGINEER deliberately carries no label so it
+  // renders at value weight.
+  const labelOpts = { weight: 'regular', fontSize: 16, letterSpacing: 16 * 0.12, fill: pass.labelColor };
 
-  // auxiliaryFields row: the tagline, its own row beneath the role pair.
-  const taglineSVG = await wordmarkSVG(tagline.value, {
-    weight: 'regular', fontSize: 20, fill: pass.foregroundColor,
-  });
-  const taglineY = roleValueY + roleValuePlaced.height + 30;
-  const taglinePlaced = place(taglineSVG, PAD, taglineY);
+  const fieldMarkup = [];
+  let y = stripBottom + 34;
+
+  // secondaryFields row: SOFTWARE ENGINEER (value only, no label).
+  if (role.label) {
+    const p0 = place(await wordmarkSVG(role.label, labelOpts), PAD, y);
+    fieldMarkup.push(p0.markup);
+    y += p0.height + 10;
+  }
+  const roleValuePlaced = place(
+    await wordmarkSVG(role.value, { weight: 'regular', fontSize: 26, fill: pass.foregroundColor }),
+    PAD, y);
+  fieldMarkup.push(roleValuePlaced.markup);
+  y += roleValuePlaced.height + 30;
+
+  // auxiliaryFields row: iOS DEVELOPER rides as the label above the tagline,
+  // which is what preserves the reference's four-line vertical order.
+  if (tagline.label) {
+    const p1 = place(await wordmarkSVG(tagline.label, labelOpts), PAD, y);
+    fieldMarkup.push(p1.markup);
+    y += p1.height + 10;
+  }
+  const taglinePlaced = place(
+    await wordmarkSVG(tagline.value, { weight: 'regular', fontSize: 20, fill: pass.foregroundColor }),
+    PAD, y);
+  fieldMarkup.push(taglinePlaced.markup);
+  const taglineY = y;
 
   // Barcode: a QR generated from the pass's own barcode message (mirroring
   // how Wallet renders the barcode itself), sat in a white rounded panel
@@ -148,9 +162,7 @@ async function main() {
                href="${stripDataUri}" />
         ${primaryPlaced.markup}
       </g>
-      ${roleLabelPlaced.markup}
-      ${roleValuePlaced.markup}
-      ${taglinePlaced.markup}
+      ${fieldMarkup.join('\n      ')}
       <rect x="${panelX}" y="${panelY}" width="${panelSize}" height="${panelSize}"
             rx="16" ry="16" fill="#FFFFFF" />
       <image x="${panelX + panelPad}" y="${panelY + panelPad}" width="${qrSize}" height="${qrSize}"

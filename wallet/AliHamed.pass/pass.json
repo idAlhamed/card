@@ -18,15 +18,15 @@
     ],
     "secondaryFields": [
       {
-        "key": "role",
-        "label": "SOFTWARE ENGINEER",
-        "value": "iOS DEVELOPER"
+        "key": "role2",
+        "label": "",
+        "value": "SOFTWARE ENGINEER"
       }
     ],
     "auxiliaryFields": [
       {
         "key": "tagline",
-        "label": "",
+        "label": "iOS DEVELOPER",
         "value": "Building mobile products, end to end."
       }
     ],
