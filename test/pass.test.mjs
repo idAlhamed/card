@@ -225,6 +225,25 @@ test('the LinkedIn and GitHub back-field labels are derived from config, not har
   assert.doesNotMatch(github.attributedValue, /idAlhamed/);
 });
 
+// The bug this guards: the strip was generated at 375x123 (Apple's "other
+// pass styles" size) for a storeCard, whose documented slot is 375x144.
+// Apple scales artwork to FILL the slot preserving aspect, then crops the
+// overflow — so the mismatch magnified everything ~17% and cut 32pt off
+// each side on-device, invisibly. Anything but an exact aspect match means
+// iOS transforms the artwork before the user ever sees it.
+test('the strip aspect matches storeCard\'s documented slot exactly, so iOS neither scales nor crops it', async () => {
+  const assets = await renderPassAssets(validConfig());
+  const SLOT_W = 375, SLOT_H = 144; // Wallet Developer Guide, store cards @1x
+  for (const [name, s] of [['strip.png', 1], ['strip@2x.png', 2], ['strip@3x.png', 3]]) {
+    const { width, height } = await sharp(assets.get(name)).metadata();
+    assert.equal(width, SLOT_W * s, `${name} width must be the slot width at @${s}x`);
+    assert.equal(height, SLOT_H * s, `${name} height must be the slot height at @${s}x`);
+    // scale-to-fill factor; anything above 1 means iOS magnifies and crops.
+    const fill = Math.max((SLOT_W * s) / width, (SLOT_H * s) / height);
+    assert.equal(fill, 1, `${name} would be rescaled by x${fill} by Wallet`);
+  }
+});
+
 test('renders all six required assets at exact sizes', async () => {
   const assets = await renderPassAssets(validConfig());
   // No logo.png: the client asked for the Apple mark and the "Business Card"
@@ -232,7 +251,11 @@ test('renders all six required assets at exact sizes', async () => {
   // icon.png is required), so the slot is left empty rather than substituted.
   const expected = {
     'icon.png': [29, 29], 'icon@2x.png': [58, 58], 'icon@3x.png': [87, 87],
-    'strip.png': [375, 123], 'strip@2x.png': [750, 246], 'strip@3x.png': [1125, 369],
+    // storeCard's documented strip slot is 375x144 at 1x — NOT the 375x123
+    // that Apple lists for "other pass styles". See STRIP_H in
+    // src/lib/pass.mjs: at 123 iOS scaled the artwork x1.1707 to fill the
+    // 144pt slot and cropped 32pt off each side on the real device.
+    'strip.png': [375, 144], 'strip@2x.png': [750, 288], 'strip@3x.png': [1125, 432],
   };
   assert.deepEqual([...assets.keys()].sort(), Object.keys(expected).sort());
   for (const [name, [w, h]] of Object.entries(expected)) {
@@ -316,11 +339,11 @@ test('the strip@3x master composites the logo without distorting it', async () =
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
   // A centre crop that comfortably contains the whole logo mark (composited
-  // in the strip's top band, roughly y=9..177 of 369 at @3x — see
+  // in the strip's top band, roughly y=18..210 of 432 at @3x — see
   // renderStripMaster's STRIP_PAD_TOP/STRIP_LOGO_H) and stays inside
   // circuitSVG's own contentClearX exclusion zone, so no stray trace pixel
   // can appear in it. Capped at 50% of the strip's height so it stops well
-  // short of SOFTWARE ENGINEER (which starts around y=270 of 369) — that
+  // short of SOFTWARE ENGINEER (which starts around y=300 of 432) — that
   // line is baked in the same bright blue as the logo, so a taller crop
   // would corrupt this ink-aspect measurement with unrelated text ink.
   const cropW = Math.round(width * 0.4);
