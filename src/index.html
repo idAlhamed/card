@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ali Hamed — iOS Developer</title>
-<meta name="description" content="Ali Hamed — iOS Developer. Building mobile products with a focus on performance &amp; user experience.">
+<meta name="description" content="Ali Hamed — Software Engineer &amp; iOS Developer. I turn ideas into high-quality mobile products people love.">
 <link rel="canonical" href="{{CARD_URL}}">
 
 <meta name="theme-color" content="#000000">
@@ -17,7 +17,7 @@
 
 <meta property="og:type" content="profile">
 <meta property="og:title" content="Ali Hamed — iOS Developer">
-<meta property="og:description" content="Building mobile products with a focus on performance &amp; user experience.">
+<meta property="og:description" content="I turn ideas into high-quality mobile products people love.">
 <meta property="og:url" content="{{CARD_URL}}">
 <meta property="og:image" content="{{CARD_URL}}/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -25,52 +25,28 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<div class="circuit">{{CIRCUIT}}</div>
+
 <main class="card">
 
   <header class="identity">
+    <img class="logo" src="assets/ah-logo.svg" width="1200" height="800" alt="">
     <h1 class="name">ALI HAMED</h1>
-    <p class="role">iOS Developer</p>
-    <p class="tech">Swift · SwiftUI · UIKit</p>
+    <p class="role-primary">SOFTWARE ENGINEER</p>
+    <p class="role-secondary">iOS DEVELOPER</p>
+    <hr class="rule">
+    <p class="tagline">I turn ideas into high-quality mobile products people love.</p>
   </header>
 
-  <hr class="rule">
-
-  <section class="pitch">
-    <p class="message">Building mobile products with a focus on performance &amp; user experience.</p>
-    <p class="cta">Got a product to build? Let’s make it happen.</p>
-  </section>
-
-  <nav class="contacts" aria-label="Contact Ali Hamed">
-    <ul>
-      <li><a href="https://www.linkedin.com/in/idalhamed/" target="_blank" rel="noopener noreferrer">
-        {{ICON:linkedin}}<span class="label">LinkedIn</span>
-        <svg class="chev" viewBox="0 0 7 12" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
-      </a></li>
-      <li><a href="https://github.com/idAlhamed" target="_blank" rel="noopener noreferrer">
-        {{ICON:github}}<span class="label">GitHub</span>
-        <svg class="chev" viewBox="0 0 7 12" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
-      </a></li>
-      <li><a href="https://discord.com/users/1065095951603212298" target="_blank" rel="noopener noreferrer" aria-label="Discord — idalhamed">
-        {{ICON:discord}}<span class="label">Discord</span>
-        <svg class="chev" viewBox="0 0 7 12" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
-      </a></li>
-      <li><a href="https://wa.me/966554248646">
-        {{ICON:whatsapp}}<span class="label">WhatsApp</span>
-        <svg class="chev" viewBox="0 0 7 12" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
-      </a></li>
-      <li><a href="mailto:officialalhamed@gmail.com">
-        {{ICON:email}}<span class="label">Email</span>
-        <svg class="chev" viewBox="0 0 7 12" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
-      </a></li>
-    </ul>
-  </nav>
-
-  <p class="save">
-    <a href="ali-hamed.vcf" download="ali-hamed.vcf">
-      <svg class="dl" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v9M4.5 7l3.5 3.5L11.5 7M2 13.5h12"/></svg>
-      Save Contact
+  <div class="actions">
+    <a class="btn btn-fill" href="ali-hamed.vcf" download="ali-hamed.vcf">
+      {{ICON:user-plus}}<span>Save Contact</span>
     </a>
-  </p>
+    <a class="btn btn-outline" href="https://wa.me/966554248646">
+      {{ICON:phone}}<span>Contact Me</span>
+    </a>
+  </div>
 
   <!-- Add to Apple Wallet — intentionally disabled.
        GitHub Pages does not reliably serve .pkpass as
@@ -79,6 +55,40 @@
        opening on a physical device. See wallet/README.md, "Delivery".
   <p class="wallet"><a href="AliHamed.pkpass">Add to Apple Wallet</a></p>
   -->
+
+  <section class="expertise" aria-labelledby="expertise-heading">
+    <h2 class="section-heading" id="expertise-heading">
+      <span class="heading-rule" aria-hidden="true"></span>
+      <span>EXPERTISE</span>
+      <span class="heading-rule" aria-hidden="true"></span>
+    </h2>
+    <ul class="expertise-grid">
+      <li class="expertise-item">{{ICON:smartphone}}<span>iOS Development</span></li>
+      <li class="expertise-item">{{ICON:layers}}<span>App Architecture</span></li>
+      <li class="expertise-item">{{ICON:gauge}}<span>Performance Optimization</span></li>
+      <li class="expertise-item">{{ICON:app-window}}<span>UI/UX Implementation</span></li>
+      <li class="expertise-item">{{ICON:cloud-upload}}<span>APIs &amp; Integrations</span></li>
+      <li class="expertise-item">{{ICON:lightbulb}}<span>Problem Solving</span></li>
+      <li class="expertise-item">{{ICON:code-xml}}<span>Clean Code</span></li>
+      <li class="expertise-item">{{ICON:shield-check}}<span>Testing</span></li>
+      <li class="expertise-item">{{ICON:users}}<span>Agile &amp; Collaboration</span></li>
+    </ul>
+  </section>
+
+  <nav class="connect" aria-labelledby="connect-heading">
+    <h2 class="section-heading" id="connect-heading">
+      <span class="heading-rule" aria-hidden="true"></span>
+      <span>LET'S CONNECT</span>
+      <span class="heading-rule" aria-hidden="true"></span>
+    </h2>
+    <ul class="social">
+      <li><a class="social-link" href="https://www.linkedin.com/in/idalhamed/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">{{ICON:linkedin}}</a></li>
+      <li><a class="social-link" href="https://github.com/idAlhamed" target="_blank" rel="noopener noreferrer" aria-label="GitHub">{{ICON:github}}</a></li>
+      <li><a class="social-link" href="https://discord.com/users/1065095951603212298" target="_blank" rel="noopener noreferrer" aria-label="Discord — idalhamed">{{ICON:discord}}</a></li>
+      <li><a class="social-link" href="https://wa.me/966554248646" aria-label="WhatsApp">{{ICON:whatsapp}}</a></li>
+      <li><a class="social-link" href="mailto:officialalhamed@gmail.com" aria-label="Email">{{ICON:mail}}</a></li>
+    </ul>
+  </nav>
 
   <footer class="footer"><p>© 2026 Ali Hamed</p></footer>
 

@@ -4,6 +4,7 @@ import { loadConfig, ConfigError } from '../src/lib/config.mjs';
 import { generateQRSVG, generateQRPNG, assertQRRoundTrip } from '../src/lib/qr.mjs';
 import { buildVCard } from '../src/lib/vcard.mjs';
 import { stampHTML, renderTouchIcon, renderOGImage } from '../src/lib/site.mjs';
+import { LOGO_SVG } from '../src/lib/logo.mjs';
 import { buildPassJSON, renderPassAssets, PassError } from '../src/lib/pass.mjs';
 import { nfcReadme } from '../src/lib/docs.mjs';
 
@@ -69,6 +70,13 @@ try {
   await writeFile(inStaging('assets/apple-touch-icon.png'), await renderTouchIcon(config));
   await writeFile(inStaging('assets/og.png'), await renderOGImage(config));
   console.log('  docs/assets/apple-touch-icon.png, og.png  (staged)');
+
+  // The client-supplied AH logo, copied byte-for-byte — never re-rendered,
+  // re-exported or otherwise touched. src/index.html references it directly
+  // via <img>, so its exact geometry, proportions and stroke appearance ship
+  // unmodified.
+  await copyFile(LOGO_SVG, inStaging('assets/ah-logo.svg'));
+  console.log('  docs/assets/ah-logo.svg  (supplied artwork, copied verbatim)');
 } catch (err) {
   await rm(staging, { recursive: true, force: true }); // no dead staging dir left for next run
   throw err;

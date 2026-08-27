@@ -1,12 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { wordmarkSVG } from './text-path.mjs';
-import { monogram } from './pass.mjs';
+import { circuitSVG } from './circuit.mjs';
+import { LOGO_ASPECT, logoRasterFor } from './logo.mjs';
 
-// Hand-authored glyphs live in src/icons; vendored brand marks in vendor/icons.
+// Hand-authored glyphs live in src/icons; vendored brand marks in
+// vendor/icons; vendored Lucide line icons (buttons, expertise grid, the
+// social row's envelope) in vendor/lucide.
 const ICON_DIRS = [
   new URL('../icons/', import.meta.url),
   new URL('../../vendor/icons/', import.meta.url),
+  new URL('../../vendor/lucide/', import.meta.url),
 ];
 
 export async function inlineIcon(name) {
@@ -24,22 +28,77 @@ export async function inlineIcon(name) {
   }
   if (raw === null) {
     throw new Error(
-      `Icon "${name}.svg" not found in src/icons/ or vendor/icons/. ` +
+      `Icon "${name}.svg" not found in src/icons/, vendor/icons/ or vendor/lucide/. ` +
       'For brand marks, run: npm run fetch:assets'
     );
   }
-  return raw
+
+  // Lucide icons are stroke-drawn outlines (`fill="none"`, `stroke="currentColor"`
+  // on the <svg> root); the vendored brand marks and the hand-authored email
+  // glyph are solid shapes with no fill/stroke of their own, relying on the
+  // browser's default black fill. Blindly forcing `fill="currentColor"` onto
+  // every icon (the previous behaviour) is correct for the second group but
+  // wrong for the first: it fills in the outline icons' interiors instead of
+  // just stroking them. So the root `fill` this function stamps on is
+  // conditional on what the source file itself declared.
+  const isStrokeIcon = /<svg[^>]*\sfill="none"/.test(raw);
+  const rootFill = isStrokeIcon ? 'none' : 'currentColor';
+
+  let out = raw
     .replace(/<\?xml[^>]*\?>\s*/g, '')
     .replace(/<title>[\s\S]*?<\/title>/g, '')      // avoid double announcement
-    .replace(/\s(role|width|height|fill)="[^"]*"/g, '')
-    .replace(/<svg/, '<svg class="icon" aria-hidden="true" fill="currentColor"')
     .trim();
+
+  // Strip role/width/height/fill ONLY from the root <svg ...> tag, never from
+  // its children. Lucide's smartphone icon draws its body as
+  // `<rect width="14" height="20" .../>` — a previous version of this
+  // function stripped width/height from every element, which zeroed that
+  // rect's own size (not just the icon's display size) and rendered it
+  // invisible.
+  out = out.replace(/^<svg\b[^>]*>/, (openTag) =>
+    openTag
+      .replace(/\s(role|width|height|fill)="[^"]*"/g, '')
+      .replace(/^<svg/, `<svg class="icon" aria-hidden="true" fill="${rootFill}"`)
+  );
+
+  return out;
+}
+
+/**
+ * Renders the shared circuit-trace motif (src/lib/circuit.mjs) as the
+ * page's decorative background layer. The generated SVG carries its own
+ * explicit width/height so it renders correctly on its own; those are
+ * stripped in favour of `preserveAspectRatio="xMidYMid slice"` so CSS can
+ * scale it to fill its container at any viewport size without distorting
+ * the traces' true 45-degree diagonals or letterboxing at odd aspect ratios.
+ */
+export function renderCircuitBackground(opts = {}) {
+  const svg = circuitSVG({ width: 390, height: 844, seed: 'ali-hamed-page', ...opts });
+  const out = svg.replace(
+    /^<svg xmlns="([^"]+)" width="\d+" height="\d+" (viewBox="[^"]+")/,
+    '<svg xmlns="$1" preserveAspectRatio="xMidYMid slice" $2'
+  );
+  if (out === svg) {
+    // circuitSVG()'s own opening-tag format is pinned by its test suite, but
+    // guard here too: a silent no-op would ship the background un-cropped
+    // (default "meet"), not a hard failure — much easier to miss.
+    throw new Error(
+      'renderCircuitBackground: circuitSVG() output format changed; update the prefix rewrite.'
+    );
+  }
+  return out;
 }
 
 export async function stampHTML(html, config) {
   let out = html.replaceAll('{{CARD_URL}}', config.url.CARD_URL);
 
-  for (const match of [...out.matchAll(/\{\{ICON:([a-z]+)\}\}/g)]) {
+  if (out.includes('{{CIRCUIT}}')) {
+    out = out.replace('{{CIRCUIT}}', renderCircuitBackground());
+  }
+
+  // Icon names may contain hyphens (Lucide: "user-plus", "app-window",
+  // "cloud-upload", "code-xml", "shield-check").
+  for (const match of [...out.matchAll(/\{\{ICON:([a-z-]+)\}\}/g)]) {
     out = out.replace(match[0], await inlineIcon(match[1]));
   }
 
@@ -51,19 +110,24 @@ export async function stampHTML(html, config) {
   return out;
 }
 
-// Reads the monogram from config.content.name rather than hardcoding it, so
-// editing the name in config.json doesn't leave the touch icon silently
-// stale (the same drift class fixed for the pass logo in pass.mjs, whose
-// monogram() this reuses rather than duplicating).
-/** 180x180 Add-to-Home-Screen icon: the name's monogram centred on black. */
-export async function renderTouchIcon(config) {
-  const mark = await wordmarkSVG(monogram(config.content.name), {
-    fontSize: 74, letterSpacing: 3, fill: '#F5F5F7',
-  });
+// The apple-touch-icon renders the client-supplied AH logo verbatim, at a
+// fixed size, so the Add-to-Home-Screen icon matches the identity used on
+// the page itself. It intentionally does NOT depend on config.content.name
+// (or anything else in config) any more — the mark is fixed artwork, not a
+// name-derived monogram — but still accepts (and ignores) a config argument
+// so existing call sites don't need to change.
+/** 180x180 Add-to-Home-Screen icon: the supplied AH logo centred on black. */
+export async function renderTouchIcon(_config) {
+  const width = 144; // leaves an even margin inside the 180x180 canvas
+  const height = Math.round(width / LOGO_ASPECT); // 96 — preserves the supplied 1200x800 ratio exactly
+  const rasterBuffer = await readFile(logoRasterFor(width)); // sharp() doesn't accept a URL input directly
+  const mark = await sharp(rasterBuffer)
+    .resize({ width, height, fit: 'fill' }) // source rasters are already exactly 3:2, so this never distorts
+    .toBuffer();
   return sharp({
     create: { width: 180, height: 180, channels: 4, background: '#000000' },
   })
-    .composite([{ input: Buffer.from(mark), gravity: 'centre' }])
+    .composite([{ input: mark, gravity: 'centre' }])
     .png()
     .toBuffer();
 }

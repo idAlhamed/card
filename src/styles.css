@@ -1,5 +1,5 @@
 /* Ali Hamed — digital business card.
-   Pure monochrome. Six colour tokens, one gradient, two transitions. */
+   Dark, circuit-etched identity system built around one electric-blue accent. */
 
 :root {
   --text-primary: #F5F5F7;
@@ -8,6 +8,13 @@
   --hairline: rgba(255, 255, 255, 0.09);
   --surface: rgba(255, 255, 255, 0.04);
   --surface-pressed: rgba(255, 255, 255, 0.08);
+
+  --accent: #00B7FF;
+  --accent-border: rgba(0, 183, 255, 0.5);
+  /* Text/icon colour sat on top of a solid --accent fill (the Save Contact
+     button): white-on-#00B7FF is only ~2.3:1, well under WCAG AA's 4.5:1.
+     Near-black keeps the exact brand blue and clears AA with room to spare. */
+  --on-accent: #05141C;
 
   --radius: 14px;
   --column: 420px;
@@ -18,191 +25,268 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
 
 body {
   margin: 0;
   min-height: 100dvh;
+  position: relative;
   display: flex;
   justify-content: center;
   font-family: var(--font);
   color: var(--text-primary);
   /* The entire depth budget: one wide radial lift on true black, so the
-     page edges are unlit pixels on an OLED display. */
-  background: radial-gradient(120% 80% at 50% 0%, #16161A 0%, #000000 62%), #000000;
+     page edges are unlit pixels on an OLED display. The circuit traces sit
+     on top of this, and the card's content sits on top of both. */
+  background: radial-gradient(120% 80% at 50% 0%, #101015 0%, #000000 62%), #000000;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
+/* ---- Circuit background ------------------------------------------------- */
+
+/* Pinned to the viewport and width-capped to the same column the card uses,
+   so the pattern always decorates the card rather than stretching across a
+   wide desktop window (which would blow the traces up far past their
+   authored stroke weight). It never competes with content: the motif itself
+   keeps a hard-clear band down the horizontal centre (src/lib/circuit.mjs),
+   which is exactly where the centred logo and type sit. */
+.circuit {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100%;
+  max-width: var(--column);
+  transform: translateX(-50%);
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.circuit svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .card {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: var(--column);
   min-height: 100dvh;
   padding:
-    calc(env(safe-area-inset-top) + 76px)
+    calc(env(safe-area-inset-top) + 40px)
     calc(env(safe-area-inset-right) + 24px)
     calc(env(safe-area-inset-bottom) + 32px)
     calc(env(safe-area-inset-left) + 24px);
 }
 
-/* ---- Identity ---------------------------------------------------------- */
+/* ---- Identity ------------------------------------------------------------ */
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.logo {
+  display: block;
+  width: min(230px, 58%);
+  height: auto; /* the width/height attributes fix the 1200x800 intrinsic ratio; this never distorts it */
+  margin: 0 0 20px;
+}
 
 .name {
   margin: 0;
-  font-size: clamp(30px, 8.5vw, 40px);
+  font-size: clamp(26px, 8vw, 34px);
   font-weight: 600;
-  letter-spacing: 0.14em;
-  line-height: 1.1;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
+  color: var(--text-primary);
 }
 
-.role {
-  margin: 16px 0 0;
-  font-size: 17px;
-  font-weight: 400;
+.role-primary {
+  margin: 14px 0 0;
+  font-size: clamp(14px, 3.6vw, 16px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.role-secondary {
+  margin: 6px 0 0;
+  font-size: clamp(13px, 3.2vw, 14px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--text-secondary);
 }
 
-.tech {
-  margin: 6px 0 0;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
-}
-
 .rule {
-  margin: 28px 0 0;
+  width: 44px;
+  height: 2px;
+  margin: 22px 0 0;
   border: 0;
-  border-top: 1px solid var(--hairline);
+  border-radius: 1px;
+  background: var(--accent);
 }
 
-/* ---- Pitch ------------------------------------------------------------- */
-
-.pitch { margin-top: 28px; }
-
-.message {
-  margin: 0;
-  max-width: 34ch;
+.tagline {
+  margin: 22px 0 0;
+  max-width: 30ch;
   font-size: 16px;
   line-height: 1.5;
   color: var(--text-secondary);
 }
 
-.cta {
-  margin: 20px 0 0;
-  font-size: 17px;
-  font-weight: 500;
+/* ---- Actions -------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 28px;
 }
 
-/* ---- Contacts ---------------------------------------------------------- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 14px 20px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 16px;
+  transition: transform 140ms var(--ease), background 140ms var(--ease),
+              filter 140ms var(--ease);
+}
 
-.contacts { margin-top: 40px; }
+.btn .icon { width: 19px; height: 19px; flex: 0 0 auto; }
 
-.contacts ul {
+.btn-fill {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 1px solid transparent;
+}
+
+.btn-fill:active {
+  transform: scale(0.99);
+  filter: brightness(0.94);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--hairline);
+}
+
+.btn-outline:active {
+  background: var(--surface-pressed);
+  transform: scale(0.99);
+}
+
+/* ---- Section headings ------------------------------------------------------ */
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 40px 0 24px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.heading-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* ---- Expertise grid --------------------------------------------------------- */
+
+.expertise-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px 8px;
   margin: 0;
   padding: 0;
   list-style: none;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
 }
 
-.contacts a {
-  position: relative;
+.expertise-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  min-height: 56px;
-  padding: 0 16px;
-  font-size: 17px;
-  color: var(--text-primary);
-  text-decoration: none;
-  transition: background 140ms var(--ease), transform 140ms var(--ease);
-}
-
-/* Dividers inset to the label's left edge, not full bleed. */
-.contacts li + li a::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 50px;
-  border-top: 1px solid var(--hairline);
-}
-
-.contacts li:first-child a { border-radius: var(--radius) var(--radius) 0 0; }
-.contacts li:last-child  a { border-radius: 0 0 var(--radius) var(--radius); }
-
-.contacts a:active {
-  background: var(--surface-pressed);
-  transform: scale(0.99);
-}
-
-.icon {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.label { flex: 1 1 auto; }
-
-.chev {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 12px;
-  fill: none;
-  stroke: var(--text-tertiary);
-  stroke-width: 1.75;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.7;
-}
-
-/* ---- Save Contact ------------------------------------------------------ */
-
-.save {
-  margin: 32px 0 0;
+  gap: 10px;
   text-align: center;
 }
 
-.save a {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 20px;
-  font-size: 15px;
-  font-weight: 500;
+.expertise-item .icon {
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.expertise-item span {
+  font-size: 13px;
+  line-height: 1.35;
   color: var(--text-secondary);
-  text-decoration: none;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  transition: background 140ms var(--ease), color 140ms var(--ease),
-              transform 140ms var(--ease);
 }
 
-.save a:active {
-  background: var(--surface-pressed);
-  color: var(--text-primary);
-  transform: scale(0.99);
+/* ---- Social row -------------------------------------------------------------- */
+
+.social {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.dl {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1.5px solid var(--accent-border);
+  border-radius: 12px;
+  color: var(--accent);
+  transition: background 140ms var(--ease), transform 140ms var(--ease);
 }
 
-/* ---- Footer ------------------------------------------------------------ */
+.social-link .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.social-link:active {
+  background: var(--surface);
+  transform: scale(0.96);
+}
+
+/* ---- Footer --------------------------------------------------------------- */
 
 .footer {
-  margin-top: auto;
-  padding-top: 56px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hairline);
   text-align: center;
 }
 
@@ -228,21 +312,20 @@ a:focus-visible {
   to   { opacity: 1; transform: none; }
 }
 
-.identity, .rule, .pitch, .contacts, .save, .footer {
+.identity, .actions, .expertise, .connect, .footer {
   animation: rise 460ms var(--ease) both;
 }
 
-/* Five groups; the rule rises with the identity it belongs to. */
-.identity, .rule { animation-delay: 0ms; }
-.pitch           { animation-delay: 60ms; }
-.contacts        { animation-delay: 120ms; }
-.save            { animation-delay: 180ms; }
-.footer          { animation-delay: 240ms; }
+.identity  { animation-delay: 0ms; }
+.actions   { animation-delay: 60ms; }
+.expertise { animation-delay: 120ms; }
+.connect   { animation-delay: 180ms; }
+.footer    { animation-delay: 240ms; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
     transition: none !important;
   }
-  .contacts a:active, .save a:active { transform: none; }
+  .btn:active, .social-link:active { transform: none; }
 }
