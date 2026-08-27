@@ -16,8 +16,10 @@ test('inlines an icon as a class-tagged, hidden SVG', async () => {
   assert.doesNotMatch(svg, /<title>/, 'titles would be announced twice by screen readers');
 });
 
-test('inlines the hand-authored envelope too', async () => {
-  assert.match(await inlineIcon('email'), /class="icon"/);
+// The hand-authored src/icons/email.svg was removed: the redesigned page uses
+// Lucide's `mail` instead, so nothing referenced it any more.
+test('inlines the Lucide mail icon used for the email link', async () => {
+  assert.match(await inlineIcon('mail'), /class="icon"/);
 });
 
 test('finds vendored Lucide line icons too', async () => {
@@ -113,7 +115,9 @@ test('surfaces a real I/O error from icon lookup instead of a misleading "not fo
   // swallowed and reported as "not found" — that message tells someone to
   // run fetch:assets, which does nothing for a permissions problem and
   // doesn't even manage this hand-authored file.
-  const path = new URL('../src/icons/__unreadable-test-icon__.svg', import.meta.url);
+  // Written into vendor/lucide/ (src/icons/ no longer exists — its only file,
+  // the hand-authored envelope, was removed as unused).
+  const path = new URL('../vendor/lucide/__unreadable-test-icon__.svg', import.meta.url);
   await writeFile(path, '<svg></svg>');
   await chmod(path, 0o000);
   try {
@@ -121,7 +125,7 @@ test('surfaces a real I/O error from icon lookup instead of a misleading "not fo
       () => inlineIcon('__unreadable-test-icon__'),
       (err) => {
         assert.equal(err.code, 'EACCES');
-        assert.doesNotMatch(err.message, /not found in src\/icons/);
+        assert.doesNotMatch(err.message, /not found in/);
         return true;
       }
     );
