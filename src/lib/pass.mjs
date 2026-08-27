@@ -89,21 +89,6 @@ export function buildPassJSON(config) {
     foregroundColor: 'rgb(245, 245, 247)',
     labelColor: 'rgb(134, 134, 139)',
 
-    // iOS draws a diagonal gloss/shine gradient over strip.png by default.
-    // strip.png now carries a real alpha cutout at its top edge (the
-    // client-requested notch — see the STRIP_NOTCH_* constants and
-    // renderStripMaster below); Apple's shine layer is not something this
-    // codebase controls or can preview, and there is no way to confirm from
-    // here whether it respects that per-pixel alpha or is composited across
-    // the strip's full rectangular bounds regardless of it. A gloss sweep
-    // crossing straight through the cut as if it were still solid would
-    // read as a rendering glitch and undermine the cut illusion the rim
-    // stroke is built to sell. Suppressing it is the conservative choice:
-    // it keeps the hand-drawn contour and its rim highlight the only
-    // lighting effect on the strip, with nothing Apple-drawn able to
-    // conflict with them.
-    suppressStripShine: true,
-
     // generic passes support no strip/background image at all, which is why
     // an earlier version of this pass could never look like the approved
     // reference (preview/Apple wallet update.png) — a plain field list on
@@ -264,87 +249,6 @@ const STRIP_CONTENT_CLEAR_X = [
   Math.round((STRIP_W + STRIP_APPROX_LOGO_W) / 2 + STRIP_CLEAR_MARGIN),
 ];
 
-// ---- top contour (client-requested curved/cut notch) --------------------
-// PassKit gives the pass itself no shape key — its rounded-rect silhouette
-// is drawn by iOS and cannot change from here. But this pass carries no
-// logo.png and no header fields (both removed at the client's request), so
-// strip.png's own top row is the first artwork pixel a user sees. That
-// makes a notch cut INTO the strip artwork the only lever available to
-// approximate the reference's curved top edge (preview/Apple wallet
-// update.png).
-//
-// The notch is carved with real alpha: fully transparent above the curve,
-// so the pass's own backgroundColor (rgb(0, 0, 0)) shows through. A bare
-// alpha hole alone would be invisible on a real device, though — the
-// backgroundColor and the strip's own fill are both pure black, so cutting
-// a hole just reveals more identical black. A thin rim-light stroke traced
-// exactly along the cut boundary (below, in renderStripNotchLayers) is what
-// actually makes the cut read as a cut, the same way the reference itself
-// relies on a light bezel line rather than a colour change to sell the cut.
-//
-// Proportions are measured directly off the reference image: the notch
-// spans ~10.4% of the full pass width, and its depth is ~28% of its own
-// width (130px wide by 37px deep, at the reference's own render scale).
-// Applied to strip's real 375pt width — which, unlike the preview canvas,
-// IS the literal point width PassKit renders on an iPhone — that yields a
-// modest, subtle dip, matching how understated the cut reads in the
-// reference itself: a detail, not a dominant shape.
-const STRIP_NOTCH_WIDTH = 44;   // pt — ~375 * 0.104, rounded
-const STRIP_NOTCH_DEPTH = 13;   // pt — ~width * 0.284 (measured depth/width), rounded
-const STRIP_NOTCH_STROKE = 'rgba(255, 255, 255, 0.35)'; // matches the reference's measured brightness at the cut edge
-const STRIP_NOTCH_STROKE_WIDTH = 1.4; // pt
-
-// The cut boundary: a cubic-bezier "S" curve with a horizontal tangent at
-// both outer corners and at the apex, so it reads as one smooth scoop
-// (matching the reference's rounded fillets) rather than a sharp V. Open
-// path, in strip-logical pt coordinates (0,0 at the strip's top-left);
-// callers close it into a shape (for the mask) or stroke it as-is (for the
-// rim light).
-function stripNotchCurveD() {
-  const cx = STRIP_W / 2;
-  const half = STRIP_NOTCH_WIDTH / 2;
-  const left = cx - half;
-  const right = cx + half;
-  const apexY = STRIP_NOTCH_DEPTH;
-  const k = half * 0.6; // horizontal control-point offset that shapes the ease
-  return (
-    `M ${left},0 ` +
-    `C ${left + k},0 ${cx - half * 0.4},${apexY} ${cx},${apexY} ` +
-    `C ${cx + half * 0.4},${apexY} ${right - k},0 ${right},0`
-  );
-}
-
-// Renders the two pixel layers the notch needs, both at the given canvas
-// pixel size and both driven by the exact same vector curve (via an SVG
-// viewBox that maps strip-logical pt coordinates to canvas pixels) — so the
-// shape scales identically at every density instead of being redrawn three
-// times.
-//   mask:   opaque (alpha 255) everywhere except the notch, which is fully
-//           transparent (alpha 0). Applied with a 'dest-in' blend to punch
-//           the hole through the opaque circuit+logo composite.
-//   stroke: the rim-light line alone, transparent elsewhere. Composited
-//           back on top AFTER the mask, unmasked, so the highlight survives
-//           even where it crosses the now-transparent notch.
-async function renderStripNotchLayers(canvasW, canvasH) {
-  const curve = stripNotchCurveD();
-  const viewBox = `0 0 ${STRIP_W} ${STRIP_H}`;
-
-  const maskSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="${canvasH}" viewBox="${viewBox}">
-    <path fill-rule="evenodd" fill="#fff"
-      d="M0,0 H${STRIP_W} V${STRIP_H} H0 Z ${curve} Z" />
-  </svg>`;
-  const strokeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasW}" height="${canvasH}" viewBox="${viewBox}">
-    <path d="${curve}" fill="none" stroke="${STRIP_NOTCH_STROKE}"
-      stroke-width="${STRIP_NOTCH_STROKE_WIDTH}" stroke-linecap="round" />
-  </svg>`;
-
-  const [mask, stroke] = await Promise.all([
-    sharp(Buffer.from(maskSvg)).png().toBuffer(),
-    sharp(Buffer.from(strokeSvg)).png().toBuffer(),
-  ]);
-  return { mask, stroke };
-}
-
 async function renderStripMaster() {
   const scale = 3; // build at @3x; @2x/@1x are downscaled from this buffer
   const dpi = 72 * scale;
@@ -374,7 +278,7 @@ async function renderStripMaster() {
   const logoLeft = Math.round((canvasW - logoWidthPx) / 2);
   const logoTop = Math.round((STRIP_TOP_BAND * scale - logoHeightPx) / 2);
 
-  const base = await sharp({
+  return sharp({
     create: { width: canvasW, height: canvasH, channels: 4, background: '#000000' },
   })
     .composite([
@@ -382,14 +286,6 @@ async function renderStripMaster() {
       { input: logo, left: logoLeft, top: logoTop },
     ])
     .png().toBuffer();
-
-  // Carve the top-edge notch: mask first (punches the alpha hole through
-  // the opaque circuit+logo composite), then the rim-light stroke on top,
-  // unmasked, so it stays visible across the cut. See the constants and
-  // renderStripNotchLayers doc-comments above for why both steps exist.
-  const { mask, stroke } = await renderStripNotchLayers(canvasW, canvasH);
-  const masked = await sharp(base).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer();
-  return sharp(masked).composite([{ input: stroke, blend: 'over' }]).png().toBuffer();
 }
 
 async function renderStripAssets() {
