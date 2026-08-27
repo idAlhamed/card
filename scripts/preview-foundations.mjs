@@ -1,13 +1,16 @@
-// Renders review previews for the redesign-foundations phase: the AH
-// circuit monogram and the circuit-trace background motif, so they can be
-// checked visually before the page/pass/print phases consume them. Nothing
+// Renders review previews for the redesign-foundations phase: the
+// circuit-trace background motif, so it can be checked visually before the
+// page/pass/print phases consume it.
+//
+// The AH logo is NOT generated here. The client supplies it as finished
+// artwork (preview/ah-logo.svg and its raster/PDF exports) and it is used
+// verbatim — never redrawn, traced or regenerated. Nothing
 // here is a build artifact — everything lands under preview/_foundations/.
 //
 // Deterministic: no timestamps, no randomness, no network access. Running
 // it twice on an unchanged tree produces byte-identical output.
 import { mkdir, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
-import { monogramSVG } from '../src/lib/monogram.mjs';
 import { circuitSVG } from '../src/lib/circuit.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -24,18 +27,6 @@ async function render(name, svg) {
 
 async function main() {
   await mkdir(outDir, { recursive: true });
-
-  // Monogram: blue-on-black (the page/wallet treatment) and white-on-black
-  // (the mono variant needed for print).
-  await render('monogram-blue.png', monogramSVG({ size: 480, color: ACCENT, background: BLACK }));
-  await render('monogram-white.png', monogramSVG({ size: 480, color: '#FFFFFF', background: BLACK }));
-
-  // Legibility check at the sizes it actually ships at: a small favicon-ish
-  // size, a mid-size UI use, a review size, and a large hero size. It must
-  // read as "AH" instantly at all four, not just the largest.
-  for (const size of [40, 80, 200, 400]) {
-    await render(`monogram-${size}px.png`, monogramSVG({ size, color: ACCENT, background: BLACK }));
-  }
 
   // Circuit motif at the three target aspect ratios: a phone page, a
   // 375x123pt Wallet strip, and an 85.6x54mm card (rendered at 10px/mm).
