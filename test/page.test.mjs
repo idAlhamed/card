@@ -12,14 +12,73 @@ const escapeHTML = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace
 // The page uses a typographic apostrophe; config uses a straight one.
 const normalise = (s) => s.replace(/[‘’]/g, "'");
 
+// Content that is real and validated but is never rendered on THIS page —
+// it belongs to the vCard, the Wallet pass, or the print card instead.
+// `expertise` is excluded from this generic loop because it's an array of
+// {icon, label} objects, not a string (String.prototype.replace would
+// throw); its own labels are checked by the dedicated expertise test below.
+const NOT_ON_PAGE = new Set([
+  'fullName',        // used in the vCard, not rendered
+  'technologies',    // Wallet-pass-only copy in the redesign; not on the page
+  'message',         // superseded on the page by taglinePage
+  'cta',             // no separate CTA line in the redesign; the buttons ARE the CTA
+  'taglineWallet',   // Wallet pass only
+  'taglineCardFront', // print card only
+  'expertise',        // array — checked separately, by label, below
+]);
+
+// The approved design stylises the role line as "iOS DEVELOPER" — Developer
+// uppercased for visual rhythm with SOFTWARE ENGINEER above it, while
+// keeping the brand-correct lowercase "i" of "iOS" (a plain CSS
+// text-transform would wrongly capitalise that too). That's a deliberate
+// display-only capitalisation change, not content drift, so this one field
+// compares case-insensitively; every other field still compares exactly.
+const CASE_INSENSITIVE = new Set(['role']);
+
 test('page copy matches config.json exactly', async () => {
   const config = await loadConfig();
   const html = normalise(await src('index.html'));
+  const haystack = CASE_INSENSITIVE.size ? html.toLowerCase() : html;
   for (const [key, value] of Object.entries(config.content)) {
-    if (key === 'fullName') continue;   // used in the vCard, not rendered
-    assert.ok(html.includes(escapeHTML(normalise(value))),
-      `src/index.html is missing content.${key}: "${value}"`);
+    if (NOT_ON_PAGE.has(key)) continue;
+    const needle = escapeHTML(normalise(value));
+    if (CASE_INSENSITIVE.has(key)) {
+      assert.ok(haystack.includes(needle.toLowerCase()),
+        `src/index.html is missing content.${key}: "${value}"`);
+    } else {
+      assert.ok(html.includes(needle),
+        `src/index.html is missing content.${key}: "${value}"`);
+    }
   }
+});
+
+test('every expertise item is rendered, in config order, with its icon and label', async () => {
+  const config = await loadConfig();
+  const html = await src('index.html');
+  assert.equal(config.content.expertise.length, 9);
+
+  const items = [...html.matchAll(/<li class="expertise-item">([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+  assert.equal(items.length, 9, 'expected exactly 9 expertise grid items');
+
+  config.content.expertise.forEach(({ icon, label }, i) => {
+    assert.ok(items[i].includes(`{{ICON:${icon}}}`), `expertise[${i}] missing icon token for "${icon}"`);
+    assert.ok(items[i].includes(escapeHTML(label)), `expertise[${i}] missing label "${label}"`);
+  });
+});
+
+test('the circuit background token is present, ready for build-time substitution', async () => {
+  assert.ok((await src('index.html')).includes('{{CIRCUIT}}'));
+});
+
+test('the supplied AH logo is referenced with its exact 1200x800 dimensions', async () => {
+  const html = await src('index.html');
+  assert.match(html, /<img class="logo" src="assets\/ah-logo\.svg" width="1200" height="800" alt="">/);
+});
+
+test('no hamburger / menu control is present — the client asked for it to be removed', async () => {
+  const html = await src('index.html');
+  assert.doesNotMatch(html, /\bmenu\b/i);
+  assert.doesNotMatch(html, /hamburger/i);
 });
 
 test('every contact href is present', async () => {

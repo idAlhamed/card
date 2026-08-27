@@ -1,12 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { wordmarkSVG } from './text-path.mjs';
-import { monogram } from './pass.mjs';
+import { circuitSVG } from './circuit.mjs';
+import { LOGO_ASPECT, logoRasterFor } from './logo.mjs';
 
-// Hand-authored glyphs live in src/icons; vendored brand marks in vendor/icons.
+// Hand-authored glyphs live in src/icons; vendored brand marks in
+// vendor/icons; vendored Lucide line icons (buttons, expertise grid, the
+// social row's envelope) in vendor/lucide.
 const ICON_DIRS = [
   new URL('../icons/', import.meta.url),
   new URL('../../vendor/icons/', import.meta.url),
+  new URL('../../vendor/lucide/', import.meta.url),
 ];
 
 export async function inlineIcon(name) {
@@ -24,22 +28,128 @@ export async function inlineIcon(name) {
   }
   if (raw === null) {
     throw new Error(
-      `Icon "${name}.svg" not found in src/icons/ or vendor/icons/. ` +
+      `Icon "${name}.svg" not found in src/icons/, vendor/icons/ or vendor/lucide/. ` +
       'For brand marks, run: npm run fetch:assets'
     );
   }
-  return raw
+
+  // Lucide icons are stroke-drawn outlines (`fill="none"`, `stroke="currentColor"`
+  // on the <svg> root); the vendored brand marks and the hand-authored email
+  // glyph are solid shapes with no fill/stroke of their own, relying on the
+  // browser's default black fill. Blindly forcing `fill="currentColor"` onto
+  // every icon (the previous behaviour) is correct for the second group but
+  // wrong for the first: it fills in the outline icons' interiors instead of
+  // just stroking them. So the root `fill` this function stamps on is
+  // conditional on what the source file itself declared.
+  const isStrokeIcon = /<svg[^>]*\sfill="none"/.test(raw);
+  const rootFill = isStrokeIcon ? 'none' : 'currentColor';
+
+  let out = raw
     .replace(/<\?xml[^>]*\?>\s*/g, '')
     .replace(/<title>[\s\S]*?<\/title>/g, '')      // avoid double announcement
-    .replace(/\s(role|width|height|fill)="[^"]*"/g, '')
-    .replace(/<svg/, '<svg class="icon" aria-hidden="true" fill="currentColor"')
     .trim();
+
+  // Strip role/width/height/fill ONLY from the root <svg ...> tag, never from
+  // its children. Lucide's smartphone icon draws its body as
+  // `<rect width="14" height="20" .../>` — a previous version of this
+  // function stripped width/height from every element, which zeroed that
+  // rect's own size (not just the icon's display size) and rendered it
+  // invisible.
+  out = out.replace(/^<svg\b[^>]*>/, (openTag) =>
+    openTag
+      .replace(/\s(role|width|height|fill)="[^"]*"/g, '')
+      .replace(/^<svg/, `<svg class="icon" aria-hidden="true" fill="${rootFill}"`)
+  );
+
+  return out;
+}
+
+// The SVG is authored once at this reference size, matching `.card`'s
+// real rendered box at the narrowest width this page supports (390 was
+// tried first, see git history — worked at 390 but crushed the motif at
+// 320 down to nothing; see below) — so 1 local unit ~= 1 real CSS pixel at
+// that size. CONTENT_INSET is the real inner padding of `.card` at that
+// same width (24px, ignoring the safe-area inset, which is 0 outside a
+// physical notch device) — the exact x-position content starts and ends at
+// (e.g. the buttons and the tagline both run edge-to-edge of this
+// padding), so [CONTENT_INSET, width - CONTENT_INSET] is the tightest
+// x-range that is guaranteed content-free — widening it further would only
+// shrink the motif's already-thin margins for no safety benefit.
+// circuitSVG's contentClearX itself reserves the extra room a lit node's
+// glow needs (see its `nodeSafety`), so no separate buffer is added here.
+//
+// Both CIRCUIT_REF_WIDTH and CIRCUIT_REF_HEIGHT matter, not just their
+// ratio to the content column: `.circuit` is `position: absolute` and
+// spans the full *document* (see styles.css), and CSS scales this
+// reference SVG to fill that box via `preserveAspectRatio="xMidYMid
+// slice"`, which crops whichever axis has room to spare after scaling the
+// other axis up to cover. This page's content height barely changes across
+// widths (measured ~1089px at 320, ~1122px at 390, ~1138px at the 420
+// column cap) while the width itself does — so a 320-wide page is
+// proportionally *taller* than a 390-wide or 420-wide one. Authoring the
+// reference at the 390 midpoint meant slice had to zoom in (to cover the
+// relatively-taller 320 case), which cropped the left/right edges — and
+// the motif's margins live exactly there, so at 320 they were cropped away
+// entirely. Authoring at the narrowest supported width (320) instead means
+// every wider/shorter-relative-to-width case makes X the *covering* axis,
+// so the full width (and both margins) always render; only the vertical
+// extent gets cropped at wider widths, which just shows fewer rows of the
+// field — not a legibility problem.
+const CIRCUIT_REF_WIDTH = 320;
+const CIRCUIT_REF_HEIGHT = 1089;
+const CONTENT_INSET = 24;
+const CONTENT_CLEAR_X = [CONTENT_INSET, CIRCUIT_REF_WIDTH - CONTENT_INSET];
+
+/**
+ * Renders the shared circuit-trace motif (src/lib/circuit.mjs) as the
+ * page's decorative background layer. The generated SVG carries its own
+ * explicit width/height so it renders correctly on its own; those are
+ * stripped in favour of `preserveAspectRatio="xMidYMid slice"` so CSS can
+ * scale it to fill its container at any viewport size without distorting
+ * the traces' true 45-degree diagonals or letterboxing at odd aspect ratios.
+ *
+ * Kept clear of the content column (contentClearX) and dialled down to a
+ * quiet, low-contrast texture (baseOpacity/glowOpacity/glowRadiusMultiplier/
+ * accentStrokeOpacity) — the motif must frame the type, never compete with
+ * it. See the approved reference at preview/Digital page update.png.
+ */
+export function renderCircuitBackground(opts = {}) {
+  const svg = circuitSVG({
+    width: CIRCUIT_REF_WIDTH,
+    height: CIRCUIT_REF_HEIGHT,
+    seed: 'ali-hamed-page',
+    contentClearX: CONTENT_CLEAR_X,
+    baseOpacity: 0.14,
+    glowOpacity: 0.09,
+    glowRadiusMultiplier: 1.4,
+    accentStrokeOpacity: 0.35,
+    ...opts,
+  });
+  const out = svg.replace(
+    /^<svg xmlns="([^"]+)" width="\d+" height="\d+" (viewBox="[^"]+")/,
+    '<svg xmlns="$1" preserveAspectRatio="xMidYMid slice" $2'
+  );
+  if (out === svg) {
+    // circuitSVG()'s own opening-tag format is pinned by its test suite, but
+    // guard here too: a silent no-op would ship the background un-cropped
+    // (default "meet"), not a hard failure — much easier to miss.
+    throw new Error(
+      'renderCircuitBackground: circuitSVG() output format changed; update the prefix rewrite.'
+    );
+  }
+  return out;
 }
 
 export async function stampHTML(html, config) {
   let out = html.replaceAll('{{CARD_URL}}', config.url.CARD_URL);
 
-  for (const match of [...out.matchAll(/\{\{ICON:([a-z]+)\}\}/g)]) {
+  if (out.includes('{{CIRCUIT}}')) {
+    out = out.replace('{{CIRCUIT}}', renderCircuitBackground());
+  }
+
+  // Icon names may contain hyphens (Lucide: "user-plus", "app-window",
+  // "cloud-upload", "code-xml", "shield-check").
+  for (const match of [...out.matchAll(/\{\{ICON:([a-z-]+)\}\}/g)]) {
     out = out.replace(match[0], await inlineIcon(match[1]));
   }
 
@@ -51,19 +161,24 @@ export async function stampHTML(html, config) {
   return out;
 }
 
-// Reads the monogram from config.content.name rather than hardcoding it, so
-// editing the name in config.json doesn't leave the touch icon silently
-// stale (the same drift class fixed for the pass logo in pass.mjs, whose
-// monogram() this reuses rather than duplicating).
-/** 180x180 Add-to-Home-Screen icon: the name's monogram centred on black. */
-export async function renderTouchIcon(config) {
-  const mark = await wordmarkSVG(monogram(config.content.name), {
-    fontSize: 74, letterSpacing: 3, fill: '#F5F5F7',
-  });
+// The apple-touch-icon renders the client-supplied AH logo verbatim, at a
+// fixed size, so the Add-to-Home-Screen icon matches the identity used on
+// the page itself. It intentionally does NOT depend on config.content.name
+// (or anything else in config) any more — the mark is fixed artwork, not a
+// name-derived monogram — but still accepts (and ignores) a config argument
+// so existing call sites don't need to change.
+/** 180x180 Add-to-Home-Screen icon: the supplied AH logo centred on black. */
+export async function renderTouchIcon(_config) {
+  const width = 144; // leaves an even margin inside the 180x180 canvas
+  const height = Math.round(width / LOGO_ASPECT); // 96 — preserves the supplied 1200x800 ratio exactly
+  const rasterBuffer = await readFile(logoRasterFor(width)); // sharp() doesn't accept a URL input directly
+  const mark = await sharp(rasterBuffer)
+    .resize({ width, height, fit: 'fill' }) // source rasters are already exactly 3:2, so this never distorts
+    .toBuffer();
   return sharp({
     create: { width: 180, height: 180, channels: 4, background: '#000000' },
   })
-    .composite([{ input: Buffer.from(mark), gravity: 'centre' }])
+    .composite([{ input: mark, gravity: 'centre' }])
     .png()
     .toBuffer();
 }

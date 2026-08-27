@@ -1,6 +1,17 @@
 // Renders preview/apple-wallet-pass.png: a design mockup of the Apple
 // Wallet pass, built from the REAL pass field values (via buildPassJSON())
-// and the REAL generated pass images (wallet/AliHamed.pass/logo@2x.png).
+// and the REAL generated pass images (wallet/AliHamed.pass/strip@2x.png).
+// This depicts the storeCard layout PassKit actually renders — strip.png
+// full-bleed at the very top of the pass (this pass has no logo.png and no
+// headerFields, so nothing insets it), then the one remaining native field
+// (the tagline, centred via textAlignment) below it, then the QR barcode —
+// rather than an idealised marketing mockup: no card-shaped notch, nothing
+// PassKit itself wouldn't actually draw. The AH logo, ALI HAMED, SOFTWARE
+// ENGINEER (blue) and iOS DEVELOPER are NOT drawn separately here — they
+// are baked into strip.png itself (see src/lib/pass.mjs's renderStripMaster
+// doc-comment for why), so this script only needs to place that one image.
+// See src/lib/pass.mjs's buildPassJSON doc-comment for why each remaining
+// field lives where it does.
 //
 // wallet/AliHamed.pass/pass.json does not exist yet — config.json's
 // apple.teamIdentifier is empty because the client has not created a Pass
@@ -24,14 +35,23 @@ const root = new URL('../', import.meta.url);
 const at = (p) => new URL(p, root);
 
 // Card geometry in PassKit points, doubled for @2x — same convention the
-// pass image assets themselves use (logo@2x.png etc).
-const CARD_W = 320 * 2; // 640
-const CARD_H = 440 * 2; // 880
-const RADIUS = 24;      // rounded-rectangle corner radius, px at 2x
-const PAD = 40;         // inner content padding, px at 2x
+// pass image assets themselves use (strip@2x.png). CARD_W is pinned to
+// strip@2x.png's own native width (750) so the strip composites at 1:1
+// with zero scaling.
+const CARD_W = 750;
+const RADIUS = 28;      // rounded-rectangle corner radius, px at 2x
+// Apple does not publish exact point values for the padding PassKit itself
+// draws around fields and the barcode — there is no public spec, only the
+// documented facts that fields sit directly under the strip and the
+// barcode sits near the bottom (see the Wallet Developer Guide). An
+// earlier revision of this preview used much larger, undocumented gaps
+// here (34pt/40pt at 1x between strip->tagline and tagline->barcode) that
+// were never grounded in anything iOS actually does, and read as an
+// exaggerated, airy gap that misrepresents how tightly a real installed
+// pass packs its fields and barcode together. These are now deliberately
+// tight, standard-padding values instead.
+const PAD = 36;          // padding below the QR panel, and around the tagline/QR column (the strip itself bleeds edge to edge, like a real storeCard strip)
 const MARGIN = 56;      // backdrop margin so the card's edges read clearly
-const CANVAS_W = CARD_W + MARGIN * 2;
-const CANVAS_H = CARD_H + MARGIN * 2;
 const BACKDROP = '#D9D9DE'; // neutral, distinct from the pass's own black
 
 /** Wraps a wordmarkSVG() result so it can be placed at (x, y) inside a parent SVG. */
@@ -41,15 +61,13 @@ function place(svgString, x, y) {
   return { markup: `<g transform="translate(${x} ${y})">${inner}</g>`, width: Number(w), height: Number(h) };
 }
 
-async function loadLogo() {
-  // Prefer logo@2x.png (320x100 — already sized for this canvas's 2x
-  // scale). Fall back to downscaling logo@3x.png if @2x is ever missing.
+async function loadPassImage(name, fallbackName, fallbackResize) {
   try {
-    return await readFile(at('wallet/AliHamed.pass/logo@2x.png'));
+    return await readFile(at(`wallet/AliHamed.pass/${name}`));
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
-    const logo3x = await readFile(at('wallet/AliHamed.pass/logo@3x.png'));
-    return sharp(logo3x).resize(320, 100, { fit: 'inside' }).png().toBuffer();
+    const fallback = await readFile(at(`wallet/AliHamed.pass/${fallbackName}`));
+    return sharp(fallback).resize(...fallbackResize).png().toBuffer();
   }
 }
 
@@ -63,79 +81,69 @@ async function main() {
   previewConfig.apple.teamIdentifier = 'XXXXXXXXXX';
 
   const pass = buildPassJSON(previewConfig);
-  const primary = pass.generic.primaryFields[0];   // name
-  const secondary = pass.generic.secondaryFields[0]; // role
-  const auxiliary = pass.generic.secondaryFields[1];  // technologies
+  const tagline = pass.storeCard.auxiliaryFields[0]; // the one remaining field
 
-  const logoBuffer = await loadLogo();
-  const logoMeta = await sharp(logoBuffer).metadata();
-  // Fit the logo into a top strip, scaled down from its native 320x100 so
-  // it reads as a header rather than dominating the card. The logo is now
-  // the Apple-mark + "Business Card" title, not the name (see
-  // src/lib/pass.mjs renderLogo) — it must stay quiet up here.
-  const logoHeight = 44;
-  const logoWidth = Math.round((logoMeta.width / logoMeta.height) * logoHeight);
-  const logoDataUri = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+  // Prefer the real @2x assets (already sized for this canvas's 2x scale);
+  // fall back to downscaling the @3x asset if @2x is ever missing.
+  const stripBuffer = await loadPassImage(
+    'strip@2x.png', 'strip@3x.png', [750, 246, { fit: 'inside' }]);
 
-  // The name is the primaryField now, so it renders at primaryField size —
-  // far larger than the 18.8pt the 160x50pt logo slot ever allowed. 0.08em
-  // tracking is unchanged from the old logo rendering (client request: keep
-  // the current restrained tracking) — at this larger size it's the same
-  // relative letterspacing, just no longer width-constrained to 160pt.
-  // Reduced from 80 (~17.5%) — at 80 the name overwhelmed the header and
-  // the rest of the pass; still far larger than ROLE/TECHNOLOGIES below it.
-  const primaryFontSize = 56;
-  const [primarySVG, roleLabelSVG, roleValueSVG, stackLabelSVG, stackValueSVG] = await Promise.all([
-    wordmarkSVG(primary.value, { fontSize: primaryFontSize, letterSpacing: primaryFontSize * 0.08, fill: pass.foregroundColor }),
-    wordmarkSVG(secondary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
-    wordmarkSVG(secondary.value, { weight: 'regular', fontSize: 24, fill: pass.foregroundColor }),
-    wordmarkSVG(auxiliary.label, { weight: 'regular', fontSize: 15, letterSpacing: 15 * 0.12, fill: pass.labelColor }),
-    wordmarkSVG(auxiliary.value, { weight: 'regular', fontSize: 20, fill: pass.foregroundColor }),
-  ]);
+  const stripMeta = await sharp(stripBuffer).metadata();
+  const stripDataUri = `data:image/png;base64,${stripBuffer.toString('base64')}`;
+  // Full-bleed, flush against the very top of the pass: a real storeCard
+  // with no logo.png and no headerFields — which is exactly what this pass
+  // is, see src/lib/pass.mjs — renders its strip with nothing above or
+  // insetting it. An earlier revision of this preview inset the strip by
+  // PAD, floating it below a gap PassKit itself would never draw; stripTop
+  // is 0 here so the mockup matches what actually installs.
+  const stripTop = 0;
+  const stripBottom = stripTop + stripMeta.height;
 
-  const primaryY = PAD + logoHeight + 56;
-  const primaryPlaced = place(primarySVG, PAD, primaryY);
-
-  // Secondary (ROLE) and auxiliary (TECHNOLOGIES) fields sit side by side
-  // in a row beneath the primary field, mirroring how Wallet lays out a
-  // generic pass's secondaryFields/auxiliaryFields row. The gap below the
-  // primary field is widened from 48 to 58 to offset its shorter glyph
-  // height, so this row lands at roughly the same spot it did before the
-  // primary field's type size was reduced.
-  const fieldsY = primaryY + primaryPlaced.height + 66;
-  const leftColX = PAD;
-  const rightColX = CARD_W / 2 + 12;
-
-  const roleLabelPlaced = place(roleLabelSVG, leftColX, fieldsY);
-  const roleValueY = fieldsY + roleLabelPlaced.height + 12;
-  const roleValuePlaced = place(roleValueSVG, leftColX, roleValueY);
-
-  const stackLabelPlaced = place(stackLabelSVG, rightColX, fieldsY);
-  const stackValueY = fieldsY + stackLabelPlaced.height + 12;
-  const stackValuePlaced = place(stackValueSVG, rightColX, stackValueY);
+  // The tagline is the one field left on the front of the pass — the name
+  // and both role lines are baked into strip.png instead (see
+  // buildPassJSON's doc-comment). `textAlignment: PKTextAlignmentCenter` is
+  // a real, native PassKit key, so it is centred here to match, rather than
+  // left-aligned the way the old field column was.
+  const taglineFontSize = 20;
+  const taglineSVG = await wordmarkSVG(tagline.value, {
+    weight: 'regular', fontSize: taglineFontSize, fill: pass.foregroundColor,
+  });
+  const taglineMeasured = place(taglineSVG, 0, 0); // measure first
+  // 20pt (at 2x) below the strip, not the previous 34pt: PassKit lays
+  // fields out directly under the strip image with the field area's own
+  // built-in padding, not a decorative gap on top of it — see the PAD
+  // comment above for what this preview's spacing is and isn't grounded in.
+  const taglineY = stripBottom + 20;
+  const taglinePlaced = place(taglineSVG, (CARD_W - taglineMeasured.width) / 2, taglineY);
 
   // Barcode: a QR generated from the pass's own barcode message (mirroring
-  // how Wallet renders the barcode itself), sat in a white rounded panel
-  // near the bottom of the card.
-  const qrSize = 260;
+  // how Wallet renders the barcode itself), sat in a plain white rounded
+  // panel — no border. Wallet draws this itself; nothing here can add a
+  // blue border to it without misrepresenting what a real device shows.
+  const qrSize = 240;
   const qrBuffer = await generateQRPNG(pass.barcodes[0].message, { width: qrSize });
   const qrDataUri = `data:image/png;base64,${qrBuffer.toString('base64')}`;
-  const panelPad = 24;
+  const panelPad = 22;
   const panelSize = qrSize + panelPad * 2;
   const panelX = (CARD_W - panelSize) / 2;
-  const panelY = CARD_H - PAD - panelSize;
+  // 28pt (at 2x) below the tagline, not the previous 40pt — see the PAD
+  // comment above.
+  const panelY = taglineY + taglineMeasured.height + 28;
+
+  const CARD_H = Math.ceil(panelY + panelSize + PAD);
+  const CANVAS_W = CARD_W + MARGIN * 2;
+  const CANVAS_H = CARD_H + MARGIN * 2;
 
   const cardSVG = `
     <g transform="translate(${MARGIN} ${MARGIN})">
+      <clipPath id="cardClip"><rect width="${CARD_W}" height="${CARD_H}" rx="${RADIUS}" ry="${RADIUS}" /></clipPath>
       <rect width="${CARD_W}" height="${CARD_H}" rx="${RADIUS}" ry="${RADIUS}"
             fill="${pass.backgroundColor}" />
-      <image x="${PAD}" y="${PAD}" width="${logoWidth}" height="${logoHeight}"
-             href="${logoDataUri}" />
-      ${primaryPlaced.markup}
-      ${roleLabelPlaced.markup}
-      ${roleValuePlaced.markup}
-      ${stackLabelPlaced.markup}
-      ${stackValuePlaced.markup}
+      <g clip-path="url(#cardClip)">
+        <image x="0" y="${stripTop}" width="${stripMeta.width}" height="${stripMeta.height}"
+               href="${stripDataUri}" />
+      </g>
+      ${taglinePlaced.markup}
       <rect x="${panelX}" y="${panelY}" width="${panelSize}" height="${panelSize}"
             rx="16" ry="16" fill="#FFFFFF" />
       <image x="${panelX + panelPad}" y="${panelY + panelPad}" width="${qrSize}" height="${qrSize}"

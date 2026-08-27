@@ -94,7 +94,8 @@ test('leaves the live docs/ untouched when a build step fails after it would pre
 
 test('produces every site artifact', async () => {
   for (const f of ['index.html', 'styles.css', 'ali-hamed.vcf',
-    'assets/qr.svg', 'assets/qr.png', 'assets/apple-touch-icon.png', 'assets/og.png']) {
+    'assets/qr.svg', 'assets/qr.png', 'assets/apple-touch-icon.png', 'assets/og.png',
+    'assets/ah-logo.svg']) {
     await assert.doesNotReject(access(new URL(`docs/${f}`, root)), `missing docs/${f}`);
   }
 });
@@ -106,28 +107,37 @@ test('the built page carries the real URL and no surviving tokens', async () => 
   assert.match(html, /<svg class="icon"/, 'icons must be inlined');
 });
 
+// docs/assets/ah-logo.svg must be the client-supplied artwork, byte for
+// byte — the build copies it, never regenerates or re-exports it.
+test('the supplied AH logo ships to docs/assets unmodified', async () => {
+  const supplied = await hash(new URL('preview/ah-logo.svg', root));
+  const shipped = await hash(new URL('docs/assets/ah-logo.svg', root));
+  assert.equal(shipped, supplied, 'docs/assets/ah-logo.svg must be byte-identical to preview/ah-logo.svg');
+});
+
+test('the built page inlines the circuit background with no leftover token', async () => {
+  const html = await readFile(new URL('docs/index.html', root), 'utf8');
+  assert.match(html, /<div class="circuit"><svg[^>]*preserveAspectRatio="xMidYMid slice"/,
+    'the {{CIRCUIT}} token must resolve to an inlined, aspect-preserving SVG');
+  assert.doesNotMatch(html, /\{\{CIRCUIT\}\}/);
+});
+
 // Pins docs/index.html — the BUILT page — as the one that must have inlined
 // icons and no template tokens. This has been mistaken for src/index.html
 // (the authored template, which correctly still contains {{ICON:...}}
 // tokens) twice; this test names the built file explicitly so that
 // confusion can't recur silently.
-test('the built page renders one inline icon per contact row and no unresolved tokens', async () => {
+test('the built page renders one inline icon per icon token and no unresolved tokens', async () => {
   const html = await readFile(new URL('docs/index.html', root), 'utf8');
   const config = JSON.parse(await readFile(new URL('config.json', root), 'utf8'));
 
-  // Derived from config rather than hardcoded, so adding a contact row does
-  // not require hand-editing this number (and cannot silently go unchecked).
-  const contactHrefs = [
-    config.contacts.linkedin,
-    config.contacts.github,
-    config.contacts.discord,
-    config.contacts.whatsapp,
-    `mailto:${config.contacts.email}`,
-  ].filter(Boolean);
-
+  // 5 social-row contacts + 2 button icons (Save Contact, Contact Me) +
+  // 9 expertise-grid icons. Derived from config's expertise length rather
+  // than hardcoded, so adding a grid item can't silently go unchecked.
+  const expectedIconCount = 5 + 2 + config.content.expertise.length;
   const iconMatches = html.match(/<svg class="icon"/g) ?? [];
-  assert.equal(iconMatches.length, contactHrefs.length,
-    `expected one inline icon svg per contact row (${contactHrefs.length})`);
+  assert.equal(iconMatches.length, expectedIconCount,
+    `expected ${expectedIconCount} inlined <svg class="icon"> elements`);
 
   const tokenMatches = html.match(/\{\{/g) ?? [];
   assert.equal(tokenMatches.length, 0, 'no unresolved {{...}} template tokens in the built page');
@@ -135,15 +145,28 @@ test('the built page renders one inline icon per contact row and no unresolved t
   assert.doesNotMatch(html, /&lt;svg/, 'icon markup must be inlined, not HTML-escaped');
   assert.doesNotMatch(html, /&lt;path/, 'icon markup must be inlined, not HTML-escaped');
 
-  for (const href of contactHrefs) {
+  // How many times each contact href is expected to appear: WhatsApp is
+  // used twice (the "Contact Me" button opens WhatsApp, per the client's
+  // decision, AND it has its own icon in the LET'S CONNECT row); every
+  // other contact appears exactly once.
+  const expectedOccurrences = new Map([
+    [config.contacts.linkedin, 1],
+    [config.contacts.github, 1],
+    [config.contacts.discord, 1],
+    [config.contacts.whatsapp, 2],
+    [`mailto:${config.contacts.email}`, 1],
+  ]);
+  for (const [href, expected] of expectedOccurrences) {
     const needle = `href="${href}"`;
     const occurrences = html.split(needle).length - 1;
-    assert.equal(occurrences, 1, `expected exactly one ${needle} in the built page`);
+    assert.equal(occurrences, expected, `expected ${expected} occurrence(s) of ${needle} in the built page`);
   }
 });
 
 test('produces the pass assets even without a Team ID', async () => {
-  for (const f of ['icon.png', 'logo.png', 'logo@3x.png']) {
+  // No logo.png: the Apple mark and "Business Card" title were removed at
+  // the client's request, and PassKit only requires icon.png.
+  for (const f of ['icon.png', 'icon@3x.png', 'strip.png', 'strip@2x.png', 'strip@3x.png']) {
     await assert.doesNotReject(access(new URL(`wallet/AliHamed.pass/${f}`, root)));
   }
 });
