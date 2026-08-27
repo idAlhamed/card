@@ -49,14 +49,19 @@ body {
 
 /* ---- Circuit background ------------------------------------------------- */
 
-/* Pinned to the viewport and width-capped to the same column the card uses,
-   so the pattern always decorates the card rather than stretching across a
-   wide desktop window (which would blow the traces up far past their
-   authored stroke weight). It never competes with content: the motif itself
-   keeps a hard-clear band down the horizontal centre (src/lib/circuit.mjs),
-   which is exactly where the centred logo and type sit. */
+/* Spans the full document (not just one viewport) and scrolls with the
+   card's content, width-capped to the same column the card uses, so the
+   pattern always decorates the card rather than stretching across a wide
+   desktop window (which would blow the traces up far past their authored
+   stroke weight). `position: absolute` (not `fixed`) is deliberate: it ties
+   the motif's local SVG coordinates one-to-one to the actual document, so
+   the hard-clear exclusion zone keyed to the content column
+   (src/lib/circuit.mjs's contentClearX, wired up in renderCircuitBackground)
+   stays clear of the real header/buttons/grid/social/footer content at
+   every scroll position, not just whatever happened to be on-screen when
+   the page loaded. */
 .circuit {
-  position: fixed;
+  position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;

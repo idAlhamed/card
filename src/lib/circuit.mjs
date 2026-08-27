@@ -75,9 +75,13 @@ function buildFlowTrace(rand, { y, gridStep, reach }) {
   const minRequired = perStepMin + minLeg; // + the final horizontal leg to the node
 
   // Too little room for a diagonal step at all: a single short horizontal
-  // stub straight to a node. Only happens on extreme aspect ratios.
+  // stub straight to a node. Usually only happens on extreme aspect ratios,
+  // but also on a caller-supplied `reach` tight enough that even one grid
+  // unit doesn't fit (a narrow contentClearX margin) — `reach` is a hard
+  // cap from the caller (kept clear of real content), so it must win over
+  // the gridStep floor, never the other way around.
   if (reach < minRequired) {
-    return [{ x: 0, y }, { x: Math.max(gridStep, reach), y }];
+    return [{ x: 0, y }, { x: Math.max(0, reach), y }];
   }
 
   const twoSteps = rand() < 0.35 && reach > perStepMin * 2 + minLeg;
@@ -150,7 +154,11 @@ function buildEdgeField(rand, { width, height, gridStep, density, maxReach }) {
     // subtraction exact in floating point (no accumulated epsilon drift
     // that would make a true 45-degree diagonal fail a dx===dy check).
     const y = snap(Math.min(height, Math.max(0, (i + 0.5) * rowStep + jitter)), 1);
-    const reach = Math.max(gridStep * 3, maxReach * (0.35 + Math.pow(rand(), 1.6) * 0.65));
+    // gridStep*3 is a "don't bother with a barely-there trace" floor for the
+    // typical case where maxReach is plentiful; it must never push the
+    // sampled reach past maxReach itself, which is a hard cap from the
+    // caller (kept clear of real content when contentClearX is in play).
+    const reach = Math.min(maxReach, Math.max(gridStep * 3, maxReach * (0.35 + Math.pow(rand(), 1.6) * 0.65)));
     const points = buildFlowTrace(rand, { y, gridStep, reach });
     traces.push(points);
   }
@@ -178,6 +186,30 @@ function buildEdgeField(rand, { width, height, gridStep, density, maxReach }) {
  *                                         in local units; also the base row spacing.
  * @param {number} [opts.strokeWidth=1.2]  Trace stroke width, in local units.
  * @param {string|null} [opts.background=null] Optional solid backing rect colour.
+ * @param {[number, number]|null} [opts.contentClearX=null] Explicit hard-clear
+ *                                         x-range, in local units, e.g. [x0, x1].
+ *                                         When given, this — not `centerClear` —
+ *                                         defines the exclusion zone: no trace,
+ *                                         hollow node, lit node or its glow may
+ *                                         be drawn with any point inside [x0, x1]
+ *                                         (a safety margin covering the worst-case
+ *                                         glow radius is reserved automatically).
+ *                                         Lets a caller key the clear zone to a
+ *                                         real content column instead of a fixed
+ *                                         fraction of the canvas width. Ignored
+ *                                         when null (the default legacy
+ *                                         width-fraction band is used instead).
+ * @param {number} [opts.centerClear=0.14] Fraction of width kept hard-clear
+ *                                         around the midpoint. Ignored when
+ *                                         `contentClearX` is given.
+ * @param {number} [opts.glowOpacity=0.22] Fill opacity of the soft glow layer
+ *                                         behind each lit terminal node.
+ * @param {number} [opts.glowRadiusMultiplier=2.4] How much larger a lit node's
+ *                                         glow circle is than the node itself.
+ * @param {number} [opts.accentStrokeOpacity=1] Stroke opacity of lit traces and
+ *                                         hollow accent-coloured nodes — lets a
+ *                                         caller make the accent read quieter
+ *                                         without changing its hue.
  * @returns {string} A complete `<svg>…</svg>` document.
  */
 export function circuitSVG(opts = {}) {
@@ -193,6 +225,11 @@ export function circuitSVG(opts = {}) {
     gridStep = 16,
     strokeWidth = 1.2,
     background = null,
+    contentClearX = null,
+    centerClear = 0.14,
+    glowOpacity = 0.22,
+    glowRadiusMultiplier = 2.4,
+    accentStrokeOpacity = 1,
   } = opts;
 
   if (!(width > 0)) throw new RangeError(`circuitSVG: width must be > 0, got ${width}`);
@@ -201,10 +238,37 @@ export function circuitSVG(opts = {}) {
 
   const rand = mulberry32(seedToInt(seed));
 
-  const centerClear = 0.14; // fraction of width kept hard-clear around the midpoint
-  const centerClearHalf = (centerClear * width) / 2;
   const center = width / 2;
-  const maxReach = Math.max(gridStep * 3, center - centerClearHalf);
+  // Node radii are drawn from baseNodeR * (0.65 + rand()*1.6), so 2.25x
+  // baseNodeR is the true worst case — computed up front (it only depends
+  // on strokeWidth) so contentClearX can reserve room for the largest
+  // possible glow before any trace is generated.
+  const baseNodeR = strokeWidth * 2.2;
+  const maxNodeR = baseNodeR * 2.25;
+
+  let maxReach;
+  if (contentClearX) {
+    // Explicit exclusion zone keyed to a real content column, rather than a
+    // fraction of the whole canvas: nothing — trace, node, or glow — may be
+    // drawn with any point inside [x0, x1]. `rawReach` is how far a trace
+    // may travel inward before its *path* would cross the boundary; the
+    // extra `nodeSafety` margin also keeps a lit terminal's glow circle
+    // (the widest thing a trace can end in) from bleeding across it.
+    const [x0, x1] = contentClearX;
+    const rawReach = Math.max(0, Math.min(x0, width - x1));
+    const nodeSafety = maxNodeR * glowRadiusMultiplier;
+    // No gridStep*3 "don't make traces absurdly short" floor here (unlike
+    // the legacy branch below) — with a tight, real content-column margin,
+    // enforcing a cosmetic minimum length could only be done by letting
+    // traces (or their glow) overshoot into the excluded content column,
+    // exactly the bug this parameter exists to prevent. Correctness wins;
+    // traces just run shorter near a tight margin, which reads as the
+    // field thinning out — consistent with the rest of the motif.
+    maxReach = Math.max(0, rawReach - nodeSafety);
+  } else {
+    const centerClearHalf = (centerClear * width) / 2; // fraction of width kept hard-clear around the midpoint
+    maxReach = Math.max(gridStep * 3, center - centerClearHalf);
+  }
 
   const leftTraces = buildEdgeField(rand, { width, height, gridStep, density, maxReach });
   const rightTracesLocal = buildEdgeField(rand, { width, height, gridStep, density, maxReach });
@@ -214,7 +278,6 @@ export function circuitSVG(opts = {}) {
 
   // Decide per-trace whether it's lit, and each terminal node's radius /
   // hollow-blue variant, up front — one draw sequence, fully deterministic.
-  const baseNodeR = strokeWidth * 2.2;
   const lit = [];
   const nodes = []; // { x, y, r, kind: 'lit' | 'hollow' | 'hollowAccent' }
   for (const pts of allTraces) {
@@ -248,7 +311,7 @@ export function circuitSVG(opts = {}) {
   const litNodes = [];
   for (const n of nodes) {
     if (n.kind === 'lit') {
-      glowNodes.push(`<circle cx="${n.x}" cy="${n.y}" r="${n.r * 2.4}" />`);
+      glowNodes.push(`<circle cx="${n.x}" cy="${n.y}" r="${n.r * glowRadiusMultiplier}" />`);
       litNodes.push(`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" />`);
     } else if (n.kind === 'hollowAccent') {
       hollowAccentNodes.push(`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" />`);
@@ -268,13 +331,13 @@ export function circuitSVG(opts = {}) {
     `stroke-opacity="${baseOpacity}" stroke-linecap="round" stroke-linejoin="round">${unlitPaths.join('')}</g>` +
     // Lit traces: full accent colour along their entire length.
     `<g fill="none" stroke="${accentColor}" stroke-width="${strokeWidth}" ` +
-    `stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round">${litPaths.join('')}</g>` +
+    `stroke-opacity="${accentStrokeOpacity}" stroke-linecap="round" stroke-linejoin="round">${litPaths.join('')}</g>` +
     // Hollow terminal nodes: dark centre (transparent — the panel behind
     // shows through), grey or accent stroke, varied radii.
     `<g fill="none" stroke="${baseColor}" stroke-width="${hollowStrokeWidth}" stroke-opacity="${baseOpacity}">${hollowNodes.join('')}</g>` +
-    `<g fill="none" stroke="${accentColor}" stroke-width="${hollowStrokeWidth}" stroke-opacity="1">${hollowAccentNodes.join('')}</g>` +
+    `<g fill="none" stroke="${accentColor}" stroke-width="${hollowStrokeWidth}" stroke-opacity="${accentStrokeOpacity}">${hollowAccentNodes.join('')}</g>` +
     // Lit terminal nodes: soft glow layer behind a solid filled dot.
-    `<g fill="${accentColor}" fill-opacity="0.22">${glowNodes.join('')}</g>` +
+    `<g fill="${accentColor}" fill-opacity="${glowOpacity}">${glowNodes.join('')}</g>` +
     `<g fill="${accentColor}">${litNodes.join('')}</g>` +
     `</svg>`
   );

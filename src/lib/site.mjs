@@ -64,6 +64,42 @@ export async function inlineIcon(name) {
   return out;
 }
 
+// The SVG is authored once at this reference size, matching `.card`'s
+// real rendered box at the narrowest width this page supports (390 was
+// tried first, see git history — worked at 390 but crushed the motif at
+// 320 down to nothing; see below) — so 1 local unit ~= 1 real CSS pixel at
+// that size. CONTENT_INSET is the real inner padding of `.card` at that
+// same width (24px, ignoring the safe-area inset, which is 0 outside a
+// physical notch device) — the exact x-position content starts and ends at
+// (e.g. the buttons and the tagline both run edge-to-edge of this
+// padding), so [CONTENT_INSET, width - CONTENT_INSET] is the tightest
+// x-range that is guaranteed content-free — widening it further would only
+// shrink the motif's already-thin margins for no safety benefit.
+// circuitSVG's contentClearX itself reserves the extra room a lit node's
+// glow needs (see its `nodeSafety`), so no separate buffer is added here.
+//
+// Both CIRCUIT_REF_WIDTH and CIRCUIT_REF_HEIGHT matter, not just their
+// ratio to the content column: `.circuit` is `position: absolute` and
+// spans the full *document* (see styles.css), and CSS scales this
+// reference SVG to fill that box via `preserveAspectRatio="xMidYMid
+// slice"`, which crops whichever axis has room to spare after scaling the
+// other axis up to cover. This page's content height barely changes across
+// widths (measured ~1089px at 320, ~1122px at 390, ~1138px at the 420
+// column cap) while the width itself does — so a 320-wide page is
+// proportionally *taller* than a 390-wide or 420-wide one. Authoring the
+// reference at the 390 midpoint meant slice had to zoom in (to cover the
+// relatively-taller 320 case), which cropped the left/right edges — and
+// the motif's margins live exactly there, so at 320 they were cropped away
+// entirely. Authoring at the narrowest supported width (320) instead means
+// every wider/shorter-relative-to-width case makes X the *covering* axis,
+// so the full width (and both margins) always render; only the vertical
+// extent gets cropped at wider widths, which just shows fewer rows of the
+// field — not a legibility problem.
+const CIRCUIT_REF_WIDTH = 320;
+const CIRCUIT_REF_HEIGHT = 1089;
+const CONTENT_INSET = 24;
+const CONTENT_CLEAR_X = [CONTENT_INSET, CIRCUIT_REF_WIDTH - CONTENT_INSET];
+
 /**
  * Renders the shared circuit-trace motif (src/lib/circuit.mjs) as the
  * page's decorative background layer. The generated SVG carries its own
@@ -71,9 +107,24 @@ export async function inlineIcon(name) {
  * stripped in favour of `preserveAspectRatio="xMidYMid slice"` so CSS can
  * scale it to fill its container at any viewport size without distorting
  * the traces' true 45-degree diagonals or letterboxing at odd aspect ratios.
+ *
+ * Kept clear of the content column (contentClearX) and dialled down to a
+ * quiet, low-contrast texture (baseOpacity/glowOpacity/glowRadiusMultiplier/
+ * accentStrokeOpacity) — the motif must frame the type, never compete with
+ * it. See the approved reference at preview/Digital page update.png.
  */
 export function renderCircuitBackground(opts = {}) {
-  const svg = circuitSVG({ width: 390, height: 844, seed: 'ali-hamed-page', ...opts });
+  const svg = circuitSVG({
+    width: CIRCUIT_REF_WIDTH,
+    height: CIRCUIT_REF_HEIGHT,
+    seed: 'ali-hamed-page',
+    contentClearX: CONTENT_CLEAR_X,
+    baseOpacity: 0.14,
+    glowOpacity: 0.09,
+    glowRadiusMultiplier: 1.4,
+    accentStrokeOpacity: 0.35,
+    ...opts,
+  });
   const out = svg.replace(
     /^<svg xmlns="([^"]+)" width="\d+" height="\d+" (viewBox="[^"]+")/,
     '<svg xmlns="$1" preserveAspectRatio="xMidYMid slice" $2'
