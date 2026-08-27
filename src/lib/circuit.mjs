@@ -1,6 +1,7 @@
 // The circuit-trace background motif shared by the page and the Wallet
 // pass. Rebuilt against the client's approved references
-// (preview/_refs/ref-circuit-wallet.png, preview/_refs/ref-circuit-page.png).
+// (cropped from preview/Apple wallet update.png and
+// preview/Digital page update.png, both retained as the approved references).
 // The reference has one strong, consistent signature, reproduced here:
 //
 //   1. Directional flow — every trace enters from the panel edge and
