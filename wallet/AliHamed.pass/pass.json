@@ -8,6 +8,7 @@
   "backgroundColor": "rgb(0, 0, 0)",
   "foregroundColor": "rgb(245, 245, 247)",
   "labelColor": "rgb(134, 134, 139)",
+  "suppressStripShine": true,
   "storeCard": {
     "primaryFields": [
       {
