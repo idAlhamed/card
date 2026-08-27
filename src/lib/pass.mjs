@@ -280,20 +280,32 @@ const STRIP_H = 123;
 // reference's *rhythm* (each notably smaller than the line above it, in
 // the same order) without matching its absolute proportions, which the
 // fixed 123pt budget cannot hold alongside a generous logo and name.
-const STRIP_PAD_TOP = 6;
-const STRIP_LOGO_H = 50;
+// Second client round: a bit more breathing room between ALI HAMED /
+// SOFTWARE ENGINEER / iOS DEVELOPER, and a bit more logo presence — same
+// hierarchy, same order, not a layout change. The 123pt budget had only
+// ~2.2pt spare (see the arithmetic in this file's own tests/commit
+// history), nowhere near the ~10pt the two increases below cost together,
+// so the difference is recovered from STRIP_PAD_TOP/STRIP_PAD_BOTTOM (the
+// strip's own edges already sit against black — nobody asked for more
+// margin there) and STRIP_GAP_ROLE_DIVIDER (not one of the three lines the
+// client named, and the divider reads fine sitting close beneath iOS
+// DEVELOPER). STRIP_GAP_LOGO_NAME is left untouched: cutting it further
+// would crowd the name against the logo, which is the opposite of what was
+// asked for.
+const STRIP_PAD_TOP = 3;
+const STRIP_LOGO_H = 56;
 const STRIP_GAP_LOGO_NAME = 6;
 const STRIP_NAME_FONT_SIZE = 26;
-const STRIP_GAP_NAME_ROLE2 = 4;
+const STRIP_GAP_NAME_ROLE2 = 6;
 const STRIP_ROLE2_FONT_SIZE = 14;
-const STRIP_GAP_ROLE2_ROLE = 4;
+const STRIP_GAP_ROLE2_ROLE = 6;
 const STRIP_ROLE_FONT_SIZE = 11;
-const STRIP_GAP_ROLE_DIVIDER = 5;
+const STRIP_GAP_ROLE_DIVIDER = 2;
 // Reference ratio (divider width : card width) scaled onto STRIP_W is
 // ~26pt; 32pt sits close to that while staying legible at @1x.
 const STRIP_DIVIDER_W = 32;
 const STRIP_DIVIDER_H = 2;
-const STRIP_PAD_BOTTOM = 6;
+const STRIP_PAD_BOTTOM = 3;
 // Letter-spacing-to-font-size ratio shared by SOFTWARE ENGINEER and iOS
 // DEVELOPER, matching the tracked-caps look already used for the primary
 // field in scripts/make-preview.mjs.

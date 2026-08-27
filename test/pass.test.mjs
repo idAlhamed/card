@@ -316,11 +316,11 @@ test('the strip@3x master composites the logo without distorting it', async () =
   const strip = sharp(assets.get('strip@3x.png'));
   const { width, height } = await strip.metadata();
   // A centre crop that comfortably contains the whole logo mark (composited
-  // in the strip's top band, roughly y=18..168 of 369 at @3x — see
+  // in the strip's top band, roughly y=9..177 of 369 at @3x — see
   // renderStripMaster's STRIP_PAD_TOP/STRIP_LOGO_H) and stays inside
   // circuitSVG's own contentClearX exclusion zone, so no stray trace pixel
   // can appear in it. Capped at 50% of the strip's height so it stops well
-  // short of SOFTWARE ENGINEER (which starts around y=255 of 369) — that
+  // short of SOFTWARE ENGINEER (which starts around y=270 of 369) — that
   // line is baked in the same bright blue as the logo, so a taller crop
   // would corrupt this ink-aspect measurement with unrelated text ink.
   const cropW = Math.round(width * 0.4);
