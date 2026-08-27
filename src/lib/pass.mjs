@@ -293,14 +293,18 @@ const STRIP_H = 123;
 // would crowd the name against the logo, which is the opposite of what was
 // asked for.
 const STRIP_PAD_TOP = 3;
-const STRIP_LOGO_H = 56;
-const STRIP_GAP_LOGO_NAME = 6;
+// Raised from 50 for the client's "stronger presence" request, then trimmed
+// by 1pt to buy back the divider's breathing room (see
+// STRIP_GAP_ROLE_DIVIDER) — at a 2pt gap the divider stopped reading as a
+// separate element and became an underline attached to iOS DEVELOPER.
+const STRIP_LOGO_H = 55;
+const STRIP_GAP_LOGO_NAME = 4;
 const STRIP_NAME_FONT_SIZE = 26;
 const STRIP_GAP_NAME_ROLE2 = 6;
 const STRIP_ROLE2_FONT_SIZE = 14;
 const STRIP_GAP_ROLE2_ROLE = 6;
 const STRIP_ROLE_FONT_SIZE = 11;
-const STRIP_GAP_ROLE_DIVIDER = 2;
+const STRIP_GAP_ROLE_DIVIDER = 5;
 // Reference ratio (divider width : card width) scaled onto STRIP_W is
 // ~26pt; 32pt sits close to that while staying legible at @1x.
 const STRIP_DIVIDER_W = 32;
