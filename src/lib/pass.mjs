@@ -50,7 +50,7 @@ function shortUrl(href) {
 // reproduces that exact transform here so pass.mjs can derive it from the
 // same config.content.role rather than duplicating a second hardcoded
 // string that could drift from the first.
-function walletRoleCase(text) {
+export function walletRoleCase(text) {
   return String(text).toUpperCase().replace(/\bIOS\b/g, 'iOS');
 }
 
@@ -97,40 +97,40 @@ export function buildPassJSON(config) {
     // motif + supplied AH logo can appear on the card itself, matching the
     // page. See wallet/README's layout note and the doc-comment above
     // renderStripAssets for the full front-of-pass composition.
+    //
+    // The client asked for (1) every field centred, (2) SOFTWARE ENGINEER in
+    // the logo's blue (#00B7FF) rather than white, and (3) a small centred
+    // divider directly beneath iOS DEVELOPER. PassKit's field dictionary
+    // supports (1) natively (`textAlignment`), but has no per-field colour
+    // (foregroundColor/labelColor are pass-wide, applying to every field
+    // alike) and no rule/separator primitive at all — so (2) and (3) are
+    // unreachable through native fields. Per the client's own fallback
+    // instruction, the whole identity block — AH logo, ALI HAMED, SOFTWARE
+    // ENGINEER (blue), iOS DEVELOPER, and the blue divider — is baked into
+    // strip.png instead (see renderStripMaster's layout constants below),
+    // in that exact top-to-bottom order, so nothing floats above the name
+    // out of order. Those three lines are therefore deliberately absent
+    // from primaryFields/secondaryFields here — carrying them in both
+    // places would duplicate content the client explicitly said not to
+    // duplicate. Only the tagline remains as a real field, since it is pure
+    // native text (no colour or divider requirement) and centring it is
+    // fully supported.
     storeCard: {
-      // The strip IS the hero (circuit motif + AH logo, baked into
-      // strip.png — see renderStripAssets). Wallet overlays primaryFields
-      // on top of the strip, so this is deliberately kept to just the name:
-      // short and reliably one line, unlike a full sentence, and the strip
-      // is composed with its bottom third left solid black (no trace, no
-      // logo ink) specifically so this overlay never collides with the
-      // artwork regardless of exactly how a given iOS version aligns it.
-      primaryFields: [
-        { key: 'name', label: '', value: content.name },
-      ],
-      // Below the strip: two rows. Wallet always renders a field's label
-      // (small, labelColor) above its value (larger, foregroundColor), so
-      // pairing roleSecondary as the label and role as the value keeps the
-      // reference's top-to-bottom order (SOFTWARE ENGINEER, then iOS
-      // Developer) even though real Wallet fields have no per-field accent
-      // colour to reproduce the reference's blue/grey split — PassKit only
-      // exposes the three global colours declared above. content.role is
-      // upper-cased (preserving the "iOS" brand casing) to match how this
-      // exact string already appears, hardcoded, in src/index.html's
-      // role-secondary paragraph — see walletRoleCase below.
-      // Wallet renders a field's LABEL small and grey above its VALUE. In the
-      // approved reference SOFTWARE ENGINEER is the prominent line and
-      // iOS DEVELOPER is secondary — so SOFTWARE ENGINEER must be a VALUE.
-      // Putting it in a label (as before) inverted that hierarchy and also
-      // read semantically as "a label for iOS Developer", which it is not.
-      secondaryFields: [
-        { key: 'role2', label: '', value: content.roleSecondary },
-      ],
-      // iOS DEVELOPER rides as the label above the tagline. That keeps the
-      // reference's vertical order — name, SOFTWARE ENGINEER, iOS DEVELOPER,
-      // tagline — while giving each line the right visual weight.
+      // No primaryFields/secondaryFields: the name and both role lines live
+      // in strip.png now (see above and renderStripMaster). An earlier
+      // revision put them here, overlaid on/below the strip; that duplicated
+      // the content this revision moved into the artwork, so those arrays
+      // are simply omitted rather than left empty for no reason.
+      //
+      // The tagline is the one native field left. `textAlignment` is a real,
+      // documented PassKit field-dictionary key — unlike per-field colour or
+      // a divider, centring genuinely is natively supported, so it is used
+      // directly rather than faked in artwork.
       auxiliaryFields: [
-        { key: 'tagline', label: walletRoleCase(content.role), value: content.taglineWallet },
+        {
+          key: 'tagline', label: '', value: content.taglineWallet,
+          textAlignment: 'PKTextAlignmentCenter',
+        },
       ],
       backFields: [
         { key: 'message', label: '', value: content.message },
@@ -202,14 +202,34 @@ async function renderIcon(size) {
 }
 
 // ---- strip.png ----------------------------------------------------------
-// storeCard's strip.png is the pass's hero image: the circuit-trace motif
-// shared with the page (src/lib/circuit.mjs, untouched here — only the
-// arguments passed to it are specific to this composition) with the
-// supplied AH logo composited on top, centred in a "top band" that leaves
-// the bottom ~28% of the strip solid black. That reserved band is what lets
-// buildPassJSON's primaryFields (the name) safely overlay the strip — see
-// the comment there — because nothing in the strip artwork occupies that
-// vertical range.
+// storeCard's strip.png is the pass's hero image. PassKit's field
+// dictionary cannot centre-align text with per-field colour, and it has no
+// divider/rule primitive at all (see buildPassJSON's doc-comment above), so
+// the client's own fallback instruction applies: reproduce the visual
+// treatment through artwork instead. This bakes the WHOLE identity block
+// into strip.png, in the reference's own top-to-bottom order —
+//
+//   AH logo -> ALI HAMED -> SOFTWARE ENGINEER (blue #00B7FF) -> iOS
+//   DEVELOPER -> a small centred blue divider
+//
+// — all centred horizontally, over the circuit-trace motif shared with the
+// page (src/lib/circuit.mjs, untouched here — only the arguments passed to
+// it are specific to this composition). An earlier revision put only the AH
+// logo in the strip and overlaid the name/roles as native fields below it;
+// moving the whole block here instead is what makes the blue SOFTWARE
+// ENGINEER and the divider possible at all, and keeping the WHOLE block
+// together — not just the two coloured lines — is what keeps the
+// reference's vertical order intact: the strip always renders above every
+// field, so splitting the block between strip and fields would put a field
+// above the strip's own logo, wrong end first.
+//
+// Accessibility trade, deliberately accepted by the client to get blue type
+// and a divider on a platform that supports neither: text baked into
+// strip.png is flattened to pixels, so it is invisible to VoiceOver and
+// does not scale with Dynamic Type. The seven back fields (see
+// buildPassJSON) are real PassKit text and stay fully accessible; only this
+// decorative front-of-pass identity block trades accessibility for the
+// requested visual treatment.
 //
 // PassKit strip sizes are 375x123 / 750x246 / 1125x369, a straight 1x/2x/3x
 // of one artwork (Apple's Wallet HIG). Rather than calling circuitSVG() at
@@ -220,76 +240,189 @@ async function renderIcon(size) {
 // density (SVG DPI) to get pixel-exact 2x/3x output, confirmed empirically:
 // sharp treats an unitless SVG width as px at a 72dpi baseline, so density
 // 72/144/216 yields exactly 375x123 / 750x246 / 1125x369. The full
-// composite (circuit + logo) is then built once at the highest density
-// (@3x) and downscaled for @2x/@1x — the same "render large, then
-// downscale" principle already used for renderIcon/renderLogo above, just
-// applied the other direction (build once at max density, shrink down)
-// since here the "large source" is the rasterisation itself, not a
-// pre-existing big bitmap.
+// composite (circuit + logo + text + divider) is built once at the highest
+// density (@3x) and downscaled for @2x/@1x — the same "render large, then
+// downscale" principle already used for renderIcon above, just applied the
+// other direction (build once at max density, shrink down) since here the
+// "large source" is the rasterisation itself, not a pre-existing big
+// bitmap. Text lines are rasterised the same way: fontSize/letterSpacing
+// are scaled by the same `scale` factor rather than relying on an SVG
+// `density`, so their pixel output is exact at every density with no extra
+// resampling — see renderStripLine.
 const STRIP_W = 375;
 const STRIP_H = 123;
-// Fraction of the strip kept solid black at the bottom — see the class
-// comment above.
-const STRIP_BOTTOM_CLEAR = 0.28;
-const STRIP_TOP_BAND = STRIP_H - Math.round(STRIP_H * STRIP_BOTTOM_CLEAR); // 89pt
-// How tall the AH logo renders within that top band, as a fraction of it —
-// leaves an even margin around the mark so it doesn't crowd the strip's
-// own edges or the bottom-clear boundary.
-const STRIP_LOGO_HEIGHT_RATIO = 0.75;
-// Circuit traces are kept clear of a column centred on the logo (mirrors
-// CONTENT_CLEAR_X in site.mjs, which does the same for the page's motif).
-// This only needs to be approximately right — it is a safety margin passed
-// to circuitSVG, not a pixel-exact composite — so an un-rounded estimate of
-// the logo's footprint is good enough here.
-const STRIP_CLEAR_MARGIN = 24;
-const STRIP_APPROX_LOGO_H = STRIP_TOP_BAND * STRIP_LOGO_HEIGHT_RATIO;
-const STRIP_APPROX_LOGO_W = STRIP_APPROX_LOGO_H * LOGO_ASPECT;
-const STRIP_CONTENT_CLEAR_X = [
-  Math.round((STRIP_W - STRIP_APPROX_LOGO_W) / 2 - STRIP_CLEAR_MARGIN),
-  Math.round((STRIP_W + STRIP_APPROX_LOGO_W) / 2 + STRIP_CLEAR_MARGIN),
-];
 
-async function renderStripMaster() {
+// Vertical layout of the strip's baked-in content, top to bottom, in
+// logical (1x) points. Font sizes look large on paper because wordmarkSVG
+// measures actual glyph ink (cap height) — for this all-caps/no-descender
+// content that runs to roughly 70-75% of the nominal font size, not 100%,
+// which is what leaves real headroom inside the fixed 123pt strip despite
+// five stacked elements. Chosen to preserve the reference's hierarchy (name
+// largest, SOFTWARE ENGINEER next, iOS DEVELOPER smallest); the assertion
+// in renderStripMaster fails the build outright, at all three densities, if
+// a future edit ever makes the block taller than the strip, rather than
+// silently clipping or overlapping content on a real device.
+const STRIP_PAD_TOP = 8;
+const STRIP_LOGO_H = 42;
+const STRIP_GAP_LOGO_NAME = 6;
+const STRIP_NAME_FONT_SIZE = 23;
+const STRIP_GAP_NAME_ROLE2 = 5;
+const STRIP_ROLE2_FONT_SIZE = 15;
+const STRIP_GAP_ROLE2_ROLE = 4;
+const STRIP_ROLE_FONT_SIZE = 11;
+const STRIP_GAP_ROLE_DIVIDER = 7;
+const STRIP_DIVIDER_W = 40;
+const STRIP_DIVIDER_H = 2;
+const STRIP_PAD_BOTTOM = 8;
+// Letter-spacing-to-font-size ratio shared by all three baked-in lines,
+// matching the tracked-caps look already used for the primary field in
+// scripts/make-preview.mjs.
+const STRIP_TRACKING_RATIO = 0.08;
+
+// Exact hex the client asked for, and also circuit.mjs's own default
+// accentColor — so SOFTWARE ENGINEER and the divider read as the same blue
+// as the circuit motif's lit traces/nodes and the supplied AH logo, not a
+// near-miss.
+const STRIP_ACCENT_COLOR = '#00B7FF';
+// Hex form of pass.json's own foregroundColor (rgb(245, 245, 247)) — ALI
+// HAMED is rendered in this colour so it matches native field text
+// elsewhere on the pass.
+const STRIP_FOREGROUND_COLOR = '#F5F5F7';
+// rgb(134, 134, 139) as a hex literal, so this file doesn't need to import
+// or duplicate the rgb() string used for pass.json's labelColor. iOS
+// DEVELOPER is rendered in this colour, matching the reference's secondary
+// (grey) weight.
+const LABEL_COLOR = '#86868B';
+
+// Circuit traces are kept clear of a column centred on the strip (mirrors
+// CONTENT_CLEAR_X in site.mjs, which does the same for the page's motif).
+// Margin around whichever baked-in line is actually widest, measured at
+// render time rather than estimated.
+const STRIP_CLEAR_MARGIN = 20;
+
+/**
+ * Renders `text` as a single rasterised line at this master's pixel scale,
+ * returning both the PNG buffer and its exact pixel width/height so the
+ * caller can centre it. `fontSize` is expressed in *logical* (1x) points;
+ * scaling it (and letter-spacing) by `scale` here — rather than rasterising
+ * at 1x and upscaling, or passing an SVG `density` — is what keeps text
+ * crisp at every output density with no resampling blur, the same
+ * guarantee the logo composite gets from sourcing an appropriately large
+ * raster up front.
+ */
+async function renderStripLine(text, { weight, fontSize, color, scale }) {
+  const scaledSize = fontSize * scale;
+  const svgString = await wordmarkSVG(text, {
+    weight,
+    fontSize: scaledSize,
+    letterSpacing: scaledSize * STRIP_TRACKING_RATIO,
+    fill: color,
+  });
+  const [, w, h] = svgString.match(/width="([\d.]+)" height="([\d.]+)"/);
+  const buffer = await sharp(Buffer.from(svgString)).png().toBuffer();
+  return { buffer, width: Number(w), height: Number(h) };
+}
+
+async function renderStripMaster(config) {
+  const { content } = config;
   const scale = 3; // build at @3x; @2x/@1x are downscaled from this buffer
   const dpi = 72 * scale;
+  const canvasW = STRIP_W * scale;
+  const canvasH = STRIP_H * scale;
+  const pt = (v) => Math.round(v * scale); // logical points -> this render's pixels
 
+  // ---- Measure/render every text line up front, at this master's scale --
+  const name = await renderStripLine(content.name, {
+    weight: 'semibold', fontSize: STRIP_NAME_FONT_SIZE, color: STRIP_FOREGROUND_COLOR, scale,
+  });
+  const role2 = await renderStripLine(content.roleSecondary, {
+    weight: 'semibold', fontSize: STRIP_ROLE2_FONT_SIZE, color: STRIP_ACCENT_COLOR, scale,
+  });
+  // walletRoleCase upper-cases while preserving "iOS"'s lowercase "i" (see
+  // its own doc-comment above) — reused here, not duplicated, so the
+  // strip's iOS DEVELOPER can never drift from that transform.
+  const role = await renderStripLine(walletRoleCase(content.role), {
+    weight: 'regular', fontSize: STRIP_ROLE_FONT_SIZE, color: LABEL_COLOR, scale,
+  });
+
+  // ---- Logo, sized directly in this render's own pixel scale (not scaled
+  // up from an already-rounded 1x value), keeping rounding error to a small
+  // fraction of a pixel --------------------------------------------------
+  const logoHeightPx = pt(STRIP_LOGO_H);
+  const logoWidthPx = Math.round(logoHeightPx * LOGO_ASPECT);
+  const rasterBuffer = await readFile(logoRasterFor(logoWidthPx));
+  const logoBuffer = await sharp(rasterBuffer)
+    .resize({ width: logoWidthPx, height: logoHeightPx, fit: 'fill' }) // source rasters are already exactly 3:2, so this never distorts
+    .toBuffer();
+
+  // ---- Divider: a small filled rect, not text ----------------------------
+  const dividerWidthPx = pt(STRIP_DIVIDER_W);
+  const dividerHeightPx = pt(STRIP_DIVIDER_H);
+  const dividerBuffer = await sharp({
+    create: { width: dividerWidthPx, height: dividerHeightPx, channels: 4, background: STRIP_ACCENT_COLOR },
+  }).png().toBuffer();
+
+  // ---- Stack everything vertically, each item centred horizontally ------
+  const items = [
+    { buffer: logoBuffer, width: logoWidthPx, height: logoHeightPx, gapBefore: STRIP_PAD_TOP },
+    { buffer: name.buffer, width: name.width, height: name.height, gapBefore: STRIP_GAP_LOGO_NAME },
+    { buffer: role2.buffer, width: role2.width, height: role2.height, gapBefore: STRIP_GAP_NAME_ROLE2 },
+    { buffer: role.buffer, width: role.width, height: role.height, gapBefore: STRIP_GAP_ROLE2_ROLE },
+    { buffer: dividerBuffer, width: dividerWidthPx, height: dividerHeightPx, gapBefore: STRIP_GAP_ROLE_DIVIDER },
+  ];
+
+  let cursorY = 0;
+  let widestWidthPx = 0;
+  const composites = [];
+  for (const item of items) {
+    cursorY += pt(item.gapBefore);
+    composites.push({
+      input: item.buffer,
+      left: Math.round((canvasW - item.width) / 2),
+      top: Math.round(cursorY),
+    });
+    cursorY += item.height;
+    widestWidthPx = Math.max(widestWidthPx, item.width);
+  }
+  cursorY += pt(STRIP_PAD_BOTTOM);
+
+  // The whole block must fit inside the strip's fixed height at every
+  // density — this is the same composition rasterised proportionally
+  // larger each time, so checking it once here (at @3x, the tightest
+  // rounding case) guarantees @2x/@1x fit too.
+  if (cursorY > canvasH) {
+    throw new PassError(
+      `Wallet strip content (${(cursorY / scale).toFixed(1)}pt) overflows the ` +
+      `fixed strip height (${STRIP_H}pt) — shrink the STRIP_* sizing constants ` +
+      'in src/lib/pass.mjs.'
+    );
+  }
+
+  // ---- Circuit background, kept clear of the centred content column -----
+  const widestWidthPt = widestWidthPx / scale;
+  const contentClearX = [
+    (STRIP_W - widestWidthPt) / 2 - STRIP_CLEAR_MARGIN,
+    (STRIP_W + widestWidthPt) / 2 + STRIP_CLEAR_MARGIN,
+  ];
   const circuitSvgString = circuitSVG({
     width: STRIP_W,
-    height: STRIP_TOP_BAND,
+    height: STRIP_H,
     seed: 'ali-hamed-wallet-strip',
     density: 1.4, // matches the approved preview/_foundations/circuit-wallet-strip.png tuning
-    contentClearX: STRIP_CONTENT_CLEAR_X,
+    contentClearX,
   });
   const circuitPng = await sharp(Buffer.from(circuitSvgString), { density: dpi })
     .png().toBuffer();
 
-  // Exact-aspect logo composite, computed directly at this render's pixel
-  // scale (not scaled up from an already-rounded 1x value), keeping
-  // rounding error to a small fraction of a pixel.
-  const logoHeightPx = Math.round(STRIP_TOP_BAND * scale * STRIP_LOGO_HEIGHT_RATIO);
-  const logoWidthPx = Math.round(logoHeightPx * LOGO_ASPECT);
-  const rasterBuffer = await readFile(logoRasterFor(logoWidthPx));
-  const logo = await sharp(rasterBuffer)
-    .resize({ width: logoWidthPx, height: logoHeightPx, fit: 'fill' })
-    .toBuffer();
-
-  const canvasW = STRIP_W * scale;
-  const canvasH = STRIP_H * scale;
-  const logoLeft = Math.round((canvasW - logoWidthPx) / 2);
-  const logoTop = Math.round((STRIP_TOP_BAND * scale - logoHeightPx) / 2);
-
   return sharp({
     create: { width: canvasW, height: canvasH, channels: 4, background: '#000000' },
   })
-    .composite([
-      { input: circuitPng, left: 0, top: 0 },
-      { input: logo, left: logoLeft, top: logoTop },
-    ])
+    .composite([{ input: circuitPng, left: 0, top: 0 }, ...composites])
     .png().toBuffer();
 }
 
-async function renderStripAssets() {
-  const master = await renderStripMaster(); // 1125x369 (@3x)
+async function renderStripAssets(config) {
+  const master = await renderStripMaster(config); // 1125x369 (@3x)
   const [x2, x1] = await Promise.all([
     sharp(master).resize(STRIP_W * 2, STRIP_H * 2).png().toBuffer(),
     sharp(master).resize(STRIP_W, STRIP_H).png().toBuffer(),
@@ -303,12 +436,8 @@ async function renderStripAssets() {
 // logo.png is optional in PassKit (only icon.png is required), so the slot is
 // simply left empty rather than filled with a substitute label.
 
-// rgb(134, 134, 139) as a hex literal, so this file doesn't need to import
-// or duplicate the rgb() string used for pass.json's labelColor.
-const LABEL_COLOR = '#86868B';
-
-export async function renderPassAssets(_config) {
-  const strips = await renderStripAssets();
+export async function renderPassAssets(config) {
+  const strips = await renderStripAssets(config);
   return new Map([
     ['icon.png', await renderIcon(29)],
     ['icon@2x.png', await renderIcon(58)],

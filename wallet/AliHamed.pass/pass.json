@@ -9,25 +9,12 @@
   "foregroundColor": "rgb(245, 245, 247)",
   "labelColor": "rgb(134, 134, 139)",
   "storeCard": {
-    "primaryFields": [
-      {
-        "key": "name",
-        "label": "",
-        "value": "ALI HAMED"
-      }
-    ],
-    "secondaryFields": [
-      {
-        "key": "role2",
-        "label": "",
-        "value": "SOFTWARE ENGINEER"
-      }
-    ],
     "auxiliaryFields": [
       {
         "key": "tagline",
-        "label": "iOS DEVELOPER",
-        "value": "Building mobile products from idea to launch."
+        "label": "",
+        "value": "Building mobile products from idea to launch.",
+        "textAlignment": "PKTextAlignmentCenter"
       }
     ],
     "backFields": [
